@@ -4,7 +4,15 @@ import json
 import sqlite3
 from pathlib import Path
 
-from kcp.db.repo import ASSET_TYPES, connect, create_asset, get_asset_by_type_name, list_asset_names
+from kcp.db.repo import (
+    ASSET_TYPES,
+    connect,
+    create_asset,
+    create_asset_version,
+    get_asset_by_type_name,
+    list_asset_names,
+    update_asset_by_id,
+)
 from kcp.util.hashing import sha256_file
 from kcp.util.image_io import load_image_as_comfy, make_thumbnail, pillow_available, save_optional_image
 from kcp.util.json_utils import validate_asset_json_fields
@@ -71,20 +79,41 @@ class KCP_AssetSave:
             if existing and save_mode == "new":
                 raise RuntimeError("kcp_asset_name_conflict: type+name already exists")
 
-            asset_id = create_asset(
-                conn,
-                {
-                    "type": asset_type,
-                    "name": name,
-                    "description": description,
-                    "tags": tags,
-                    "positive_fragment": positive_fragment,
-                    "negative_fragment": negative_fragment,
-                    "json_fields": parsed_json,
-                    "version": 1,
-                    "parent_id": None,
-                },
-            )
+            effective_name = name
+            if existing and save_mode == "new_version_of_name":
+                effective_name = f"{name}__v{int(existing['version']) + 1}"
+                warnings.append(f"name adjusted to {effective_name} to satisfy UNIQUE(type,name)")
+
+            if existing and save_mode == "overwrite_by_name":
+                asset_id = existing["id"]
+            else:
+                if existing and save_mode == "new_version_of_name":
+                    asset_id = create_asset_version(
+                        conn,
+                        existing,
+                        effective_name,
+                        description=description,
+                        tags=tags,
+                        positive_fragment=positive_fragment,
+                        negative_fragment=negative_fragment,
+                        json_fields=parsed_json,
+                    )
+                else:
+                    asset_id = create_asset(
+                        conn,
+                        {
+                            "type": asset_type,
+                            "name": effective_name,
+                            "description": description,
+                            "tags": tags,
+                            "positive_fragment": positive_fragment,
+                            "negative_fragment": negative_fragment,
+                            "json_fields": parsed_json,
+                            "version": 1,
+                            "parent_id": None,
+                        },
+                    )
+
             image_rel = ""
             thumb_rel = ""
             image_hash = ""
@@ -93,7 +122,7 @@ class KCP_AssetSave:
                     raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
 
                 image_path = root / "images" / asset_type / asset_id / "original.png"
-                if not save_optional_image(image, image_path):
+                if not save_optional_image(image, image_path, fmt="PNG"):
                     raise RuntimeError("kcp_io_write_failed: failed to save IMAGE input")
 
                 image_rel = str(image_path.relative_to(root))
@@ -107,19 +136,33 @@ class KCP_AssetSave:
                         warnings.append("thumbnail generation failed; saved original image without thumbnail")
                 except Exception:
                     warnings.append("thumbnail generation failed; saved original image without thumbnail")
+            elif asset_type == "environment":
+                warnings.append("environment asset saved without plate image; plate-lock workflows will be blocked")
 
+            if existing and save_mode == "overwrite_by_name":
+                update_asset_by_id(
+                    conn,
+                    asset_id,
+                    description=description,
+                    tags=tags,
+                    positive_fragment=positive_fragment,
+                    negative_fragment=negative_fragment,
+                    json_fields=parsed_json,
+                    image_path=image_rel,
+                    thumb_path=thumb_rel,
+                    image_hash=image_hash,
+                )
+            elif image is not None:
                 conn.execute(
                     "UPDATE assets SET image_path=?, thumb_path=?, image_hash=? WHERE id=?",
                     (image_rel, thumb_rel, image_hash, asset_id),
                 )
                 conn.commit()
-            elif asset_type == "environment":
-                warnings.append("environment asset saved without plate image; plate-lock workflows will be blocked")
 
             out = {
                 "asset_id": asset_id,
                 "type": asset_type,
-                "name": name,
+                "name": effective_name,
                 "warnings": warnings,
                 "image_path": image_rel,
                 "thumb_path": thumb_rel,

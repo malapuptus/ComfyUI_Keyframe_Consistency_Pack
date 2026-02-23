@@ -55,6 +55,94 @@ def create_asset(conn: sqlite3.Connection, payload: dict) -> str:
     return asset_id
 
 
+
+
+def update_asset_by_id(
+    conn: sqlite3.Connection,
+    asset_id: str,
+    *,
+    description: str,
+    tags: list,
+    positive_fragment: str,
+    negative_fragment: str,
+    json_fields: dict,
+    image_path: str = "",
+    thumb_path: str = "",
+    image_hash: str = "",
+    bump_version: bool = False,
+):
+    row = conn.execute("SELECT version FROM assets WHERE id = ?", (asset_id,)).fetchone()
+    if not row:
+        raise ValueError(f"asset not found: {asset_id}")
+    version = int(row[0]) + 1 if bump_version else int(row[0])
+    conn.execute(
+        """
+        UPDATE assets
+        SET description = ?,
+            tags_json = ?,
+            positive_fragment = ?,
+            negative_fragment = ?,
+            json_fields = ?,
+            image_path = ?,
+            thumb_path = ?,
+            image_hash = ?,
+            version = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            description,
+            json.dumps(tags),
+            positive_fragment,
+            negative_fragment,
+            json.dumps(json_fields),
+            image_path,
+            thumb_path,
+            image_hash,
+            version,
+            now_ms(),
+            asset_id,
+        ),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+
+
+def create_asset_version(
+    conn: sqlite3.Connection,
+    existing_row,
+    new_name: str,
+    *,
+    description: str,
+    tags: list,
+    positive_fragment: str,
+    negative_fragment: str,
+    json_fields: dict,
+    image_path: str = "",
+    thumb_path: str = "",
+    image_hash: str = "",
+) -> str:
+    new_version = int(existing_row["version"]) + 1
+    return create_asset(
+        conn,
+        {
+            "type": existing_row["type"],
+            "name": new_name,
+            "description": description,
+            "tags": tags,
+            "positive_fragment": positive_fragment,
+            "negative_fragment": negative_fragment,
+            "json_fields": json_fields,
+            "thumb_path": thumb_path,
+            "image_path": image_path,
+            "image_hash": image_hash,
+            "version": new_version,
+            "parent_id": existing_row["id"],
+            "is_archived": int(existing_row["is_archived"]),
+        },
+    )
+
+
 def get_asset_by_type_name(conn: sqlite3.Connection, asset_type: str, name: str, include_archived: bool = False):
     q = "SELECT * FROM assets WHERE type = ? AND name = ?"
     args = [asset_type, name]

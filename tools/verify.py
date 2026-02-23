@@ -49,7 +49,8 @@ def smoke_asset_thumb() -> tuple[bool, str]:
     original_make_thumbnail = asset_nodes.make_thumbnail
     original_load_image_as_comfy = asset_nodes.load_image_as_comfy
 
-    def _fake_save_optional_image(_image, path: Path) -> bool:
+    def _fake_save_optional_image(_image, path: Path, fmt: str | None = None) -> bool:
+        _ = fmt
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"fake")
         return True
@@ -426,6 +427,104 @@ def smoke_promote_keyframe() -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+
+def smoke_asset_save_modes() -> tuple[bool, str]:
+    """Smoke: AssetSave honors new/overwrite_by_name/new_version_of_name."""
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.nodes.asset_nodes import KCP_AssetSave
+        from kcp.db.repo import connect
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "kcp"
+            db_path, _, _ = KCP_ProjectInit().run(str(root), "kcp.sqlite", True)
+            saver = KCP_AssetSave()
+
+            aid1, _, _ = saver.run(db_path, "character", "hero", "d1", "p1", "n1", "", "tag1", "new", None)
+            conn = connect(Path(db_path))
+            try:
+                row1 = conn.execute("SELECT id, updated_at FROM assets WHERE type='character' AND name='hero'").fetchone()
+            finally:
+                conn.close()
+            if not row1 or row1[0] != aid1:
+                return False, "initial save failed"
+
+            aid2, _, _ = saver.run(db_path, "character", "hero", "d2", "p2", "n2", "", "tag2", "overwrite_by_name", None)
+            if aid2 != aid1:
+                return False, "overwrite_by_name changed asset_id"
+
+            conn = connect(Path(db_path))
+            try:
+                count1 = conn.execute("SELECT COUNT(*) FROM assets WHERE type='character' AND name LIKE 'hero%'").fetchone()[0]
+                row2 = conn.execute("SELECT updated_at, positive_fragment FROM assets WHERE id=?", (aid1,)).fetchone()
+            finally:
+                conn.close()
+            if count1 != 1:
+                return False, f"overwrite_by_name count mismatch: {count1}"
+            if row2[1] != "p2":
+                return False, "overwrite_by_name failed to update content"
+
+            aid3, _, out_json = saver.run(db_path, "character", "hero", "d3", "p3", "n3", "", "tag3", "new_version_of_name", None)
+            payload = json.loads(out_json)
+            if "__v2" not in payload.get("name", ""):
+                return False, f"versioned name missing __v2: {payload.get('name')}"
+
+            conn = connect(Path(db_path))
+            try:
+                count2 = conn.execute("SELECT COUNT(*) FROM assets WHERE type='character' AND (name='hero' OR name LIKE 'hero__v%')").fetchone()[0]
+                new_row = conn.execute("SELECT parent_id, version, name FROM assets WHERE id=?", (aid3,)).fetchone()
+            finally:
+                conn.close()
+            if count2 != 2:
+                return False, f"new_version_of_name count mismatch: {count2}"
+            if not new_row or new_row[0] != aid1 or int(new_row[1]) != 2:
+                return False, "parent/version linkage invalid"
+
+        return True, "asset save modes ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_image_format_headers() -> tuple[bool, str]:
+    """Smoke: encoded file bytes match PNG/WEBP headers."""
+    try:
+        from kcp.util import image_io
+
+        orig_pillow = image_io.pillow_available
+        orig_conv = image_io.comfy_image_to_pil
+
+        class _FakeImage:
+            def save(self, path, format=None):
+                p = Path(path)
+                if (format or "").upper() == "PNG":
+                    p.write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
+                elif (format or "").upper() == "WEBP":
+                    p.write_bytes(b"RIFFxxxxWEBPVP8 ")
+                else:
+                    p.write_bytes(b"BAD")
+
+        image_io.pillow_available = lambda: True
+        image_io.comfy_image_to_pil = lambda _img: _FakeImage()
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                base = Path(td)
+                png_path = base / "a.png"
+                webp_path = base / "b.webp"
+                image_io.save_comfy_image_atomic([[[[1, 0, 0]]]], png_path, fmt="PNG")
+                image_io.save_comfy_image_atomic([[[[1, 0, 0]]]], webp_path, fmt="WEBP")
+                pb = png_path.read_bytes()
+                wb = webp_path.read_bytes()
+                if not pb.startswith(b"\x89PNG"):
+                    return False, "png header mismatch"
+                if not (wb.startswith(b"RIFF") and b"WEBP" in wb[:16]):
+                    return False, "webp header mismatch"
+            return True, "image format headers ok"
+        finally:
+            image_io.pillow_available = orig_pillow
+            image_io.comfy_image_to_pil = orig_conv
+    except Exception as e:
+        return False, str(e)
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fast", action="store_true")
@@ -458,6 +557,8 @@ def main() -> int:
             ("smoke_set_item_media_update", smoke_set_item_media_update),
             ("smoke_set_item_load", smoke_set_item_load),
             ("smoke_promote_keyframe", smoke_promote_keyframe),
+            ("smoke_asset_save_modes", smoke_asset_save_modes),
+            ("smoke_image_format_headers", smoke_image_format_headers),
         ]:
             ok, msg = fn()
             oracles.append(name)
