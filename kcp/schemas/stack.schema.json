@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kcp.stack.schema.json",
+  "type": "object",
+  "required": ["format_version", "name", "asset_refs", "overrides"],
+  "properties": {
+    "format_version": {"type": "string", "enum": ["1.0"]},
+    "name": {"type": "string"},
+    "asset_refs": {
+      "type": "object",
+      "properties": {
+        "character_id": {"type": "string"},
+        "environment_id": {"type": "string"},
+        "action_id": {"type": "string"},
+        "camera_id": {"type": "string"},
+        "lighting_id": {"type": "string"},
+        "style_id": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "overrides": {"type": "object", "additionalProperties": true}
+  },
+  "additionalProperties": false
+}
