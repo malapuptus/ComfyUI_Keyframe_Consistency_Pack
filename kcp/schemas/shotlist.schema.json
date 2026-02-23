@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kcp.shotlist.schema.json",
+  "type": "object",
+  "required": ["format_version", "project", "shots"],
+  "properties": {
+    "format_version": {"type": "string", "enum": ["1.0"]},
+    "project": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {"name": {"type": "string"}, "notes": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "shots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["seq", "name", "stack_ref", "variant_policy"],
+        "properties": {
+          "seq": {"type": "integer"},
+          "name": {"type": "string"},
+          "stack_ref": {"type": "object", "properties": {"stack_id": {"type": "string"}}, "additionalProperties": false},
+          "shot_overrides": {"type": "object", "additionalProperties": true},
+          "variant_policy": {
+            "type": "object",
+            "required": ["policy_id"],
+            "properties": {"policy_id": {"type": "string"}, "policy_overrides": {"type": "object", "additionalProperties": true}},
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
