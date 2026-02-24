@@ -26,6 +26,7 @@ def _safe_stack_choices(db_path: str, include_archived: bool, refresh_token: int
 class KCP_StackSave:
     OUTPUT_NODE = True
 
+class KCP_StackSave:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -94,6 +95,17 @@ class KCP_StackPick:
         }
 
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "IMAGE", "IMAGE", "STRING")
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "db_path": ("STRING", {"default": "output/kcp/db/kcp.sqlite"}),
+                "stack_name": ("STRING", {"default": ""}),
+                "include_archived": ("BOOLEAN", {"default": False}),
+                "refresh_token": ("INT", {"default": 0}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "IMAGE", "IMAGE")
     RETURN_NAMES = (
         "stack_id",
         "stack_json",
@@ -119,6 +131,15 @@ class KCP_StackPick:
         if (stack_name is None or str(stack_name).strip() == "") and not strict:
             return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "no stack selected"}))
 
+        _ = refresh_token
+        conn = connect(Path(db_path))
+        try:
+            return list_stack_names(conn, include_archived=include_archived)
+        finally:
+            conn.close()
+
+    def run(self, db_path, stack_name, include_archived=False, refresh_token=0):
+        _ = refresh_token
         conn = connect(Path(db_path))
         try:
             srow = get_stack_by_name(conn, stack_name, include_archived=include_archived)
@@ -126,6 +147,7 @@ class KCP_StackPick:
                 if strict:
                     raise RuntimeError("kcp_stack_not_found")
                 return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "stack not found"}))
+                raise RuntimeError("kcp_stack_not_found")
 
             def frag(asset_id: str | None) -> str:
                 if not asset_id:

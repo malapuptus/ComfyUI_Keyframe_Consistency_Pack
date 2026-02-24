@@ -37,6 +37,13 @@ def _safe_asset_choices(db_path: str, asset_type: str, include_archived: bool, r
 class KCP_AssetSave:
     OUTPUT_NODE = True
 
+from kcp.db.repo import ASSET_TYPES, connect, create_asset, get_asset_by_type_name, list_asset_names
+from kcp.util.hashing import sha256_file
+from kcp.util.image_io import make_thumbnail, pillow_available, save_optional_image
+from kcp.util.json_utils import validate_asset_json_fields
+
+
+class KCP_AssetSave:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -74,6 +81,7 @@ class KCP_AssetSave:
         conn = connect(dbp)
         warnings = []
         thumb_image_out = image
+
         try:
             existing = get_asset_by_type_name(conn, asset_type, name, include_archived=True)
             if existing and save_mode == "new":
@@ -114,6 +122,20 @@ class KCP_AssetSave:
                         },
                     )
 
+            asset_id = create_asset(
+                conn,
+                {
+                    "type": asset_type,
+                    "name": name,
+                    "description": description,
+                    "tags": tags,
+                    "positive_fragment": positive_fragment,
+                    "negative_fragment": negative_fragment,
+                    "json_fields": parsed_json,
+                    "version": 1,
+                    "parent_id": None,
+                },
+            )
             image_rel = ""
             thumb_rel = ""
             image_hash = ""
@@ -123,6 +145,7 @@ class KCP_AssetSave:
 
                 image_path = root / "images" / asset_type / asset_id / "original.png"
                 if not save_optional_image(image, image_path, fmt="PNG"):
+                if not save_optional_image(image, image_path):
                     raise RuntimeError("kcp_io_write_failed: failed to save IMAGE input")
 
                 image_rel = str(image_path.relative_to(root))
@@ -131,7 +154,7 @@ class KCP_AssetSave:
                 try:
                     if make_thumbnail(image_path, thumb_path, max_px=384):
                         thumb_rel = str(thumb_path.relative_to(root))
-                        thumb_image_out = load_image_as_comfy(thumb_path)
+                        thumb_image_out = load_image_as_comfy(thumb_path
                     else:
                         warnings.append("thumbnail generation failed; saved original image without thumbnail")
                 except Exception:
@@ -153,21 +176,26 @@ class KCP_AssetSave:
                     image_hash=image_hash,
                 )
             elif image is not None:
+
                 conn.execute(
                     "UPDATE assets SET image_path=?, thumb_path=?, image_hash=? WHERE id=?",
                     (image_rel, thumb_rel, image_hash, asset_id),
                 )
                 conn.commit()
+            elif asset_type == "environment":
+                warnings.append("environment asset saved without plate image; plate-lock workflows will be blocked")
 
             out = {
                 "asset_id": asset_id,
                 "type": asset_type,
                 "name": effective_name,
+                "name": name,
                 "warnings": warnings,
                 "image_path": image_rel,
                 "thumb_path": thumb_rel,
             }
             return (asset_id, thumb_image_out, json.dumps(out))
+            return (asset_id, None, json.dumps(out))
         except sqlite3.IntegrityError as e:
             raise RuntimeError(f"kcp_asset_name_conflict: {e}") from e
         except Exception as e:
@@ -202,6 +230,19 @@ class KCP_AssetPick:
 
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "IMAGE", "IMAGE", "STRING")
     RETURN_NAMES = ("asset_id", "positive_fragment", "negative_fragment", "json_fields", "thumb_image", "image", "warning_json")
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "db_path": ("STRING", {"default": "output/kcp/db/kcp.sqlite"}),
+                "asset_type": (sorted(ASSET_TYPES),),
+                "asset_name": ("STRING", {"default": ""}),
+                "include_archived": ("BOOLEAN", {"default": False}),
+                "refresh_token": ("INT", {"default": 0}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "IMAGE", "IMAGE")
+    RETURN_NAMES = ("asset_id", "positive_fragment", "negative_fragment", "json_fields", "thumb_image", "image")
     FUNCTION = "run"
     CATEGORY = "KCP"
 
@@ -214,6 +255,15 @@ class KCP_AssetPick:
         if (asset_name is None or str(asset_name).strip() == "") and not strict:
             return ("", "", "", "{}", None, None, json.dumps({"warning": "no asset selected"}))
 
+        _ = refresh_token
+        conn = connect(Path(db_path))
+        try:
+            return list_asset_names(conn, asset_type, include_archived=include_archived)
+        finally:
+            conn.close()
+
+    def run(self, db_path, asset_type, asset_name, include_archived=False, refresh_token=0):
+        _ = refresh_token
         conn = connect(Path(db_path))
         try:
             row = get_asset_by_type_name(conn, asset_type, asset_name, include_archived=include_archived)
@@ -221,11 +271,13 @@ class KCP_AssetPick:
                 if strict:
                     raise RuntimeError("kcp_asset_not_found")
                 return ("", "", "", "{}", None, None, json.dumps({"warning": "asset not found"}))
+                raise RuntimeError("kcp_asset_not_found")
             root = Path(db_path).parent.parent
             if row["image_path"]:
                 image_path = root / row["image_path"]
                 if not image_path.exists():
                     raise RuntimeError("kcp_asset_image_missing")
             return (row["id"], row["positive_fragment"], row["negative_fragment"], row["json_fields"], None, None, "{}")
+            return (row["id"], row["positive_fragment"], row["negative_fragment"], row["json_fields"], None, None)
         finally:
             conn.close()

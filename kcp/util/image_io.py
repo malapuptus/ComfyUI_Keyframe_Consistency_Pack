@@ -36,6 +36,8 @@ def comfy_image_to_pil(image_obj: Any):
         return image_obj.convert("RGB")
 
     data = image_obj
+
+    # torch tensor -> numpy (duck-typed; no hard dependency)
     if hasattr(data, "detach"):
         data = data.detach()
     if hasattr(data, "cpu"):
@@ -57,6 +59,7 @@ def comfy_image_to_pil(image_obj: Any):
     if c < 3:
         raise ValueError("IMAGE must have at least 3 channels")
 
+    # Prefer vectorized ndarray operations when available.
     if hasattr(data, "astype") and hasattr(data, "max"):
         arr = data[..., :3]
         max_val = float(arr.max()) if arr.size else 0.0
@@ -65,6 +68,7 @@ def comfy_image_to_pil(image_obj: Any):
         arr = arr.clip(0.0, 255.0).astype("uint8")
         return Image.fromarray(arr, mode="RGB")
 
+    # Fallback list conversion
     if hasattr(data, "tolist"):
         data = data.tolist()
 
@@ -132,6 +136,7 @@ def save_comfy_image_atomic(image_obj: Any, path: Path, fmt: str | None = None) 
 
     If fmt is omitted, it is inferred from path suffix (.webp -> WEBP, else PNG).
     """
+def save_optional_image(image_obj: Any, path: Path) -> bool:
     if image_obj is None:
         return False
     if not pillow_available():
@@ -145,6 +150,10 @@ def save_comfy_image_atomic(image_obj: Any, path: Path, fmt: str | None = None) 
     tmp = path.with_suffix(path.suffix + ".tmp")
     img = comfy_image_to_pil(image_obj)
     img.save(tmp, format=encode_fmt)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    img = comfy_image_to_pil(image_obj)
+    img.save(tmp, format="PNG")
     tmp.replace(path)
     return True
 

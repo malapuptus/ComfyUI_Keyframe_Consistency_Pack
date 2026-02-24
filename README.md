@@ -7,10 +7,16 @@ Text-only assets work without Pillow.
 
 Pillow is required for any node path that writes images/thumbnails (for example `KCP_AssetSave` when `image` input is connected).
 
+
 Install dependencies in your ComfyUI Python environment:
 
 ```bash
 python -m pip install -r requirements.txt
+=======
+Install Pillow in your ComfyUI Python environment:
+
+```bash
+python -m pip install Pillow
 ```
 
 Behavior when Pillow is missing:
@@ -21,7 +27,10 @@ Behavior when Pillow is missing:
 ## Thumbnail behavior
 - Thumbnail format: `webp`
 - Default max size: `384px`
+
 - If thumbnail generation fails, KCP saves the original PNG and appends a warning in `asset_json.warnings`.
+=======
+- If thumbnail generation fails, KCP still saves the original PNG and appends a warning in `asset_json.warnings`.
 
 ## json_fields validation (asset schema)
 `KCP_AssetSave` validates non-empty `json_fields` strictly against `kcp/schemas/asset.schema.json`.
@@ -110,3 +119,4 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - With `overwrite=False`, existing media raises `kcp_set_item_media_exists`.
 - `KCP_KeyframeSetItemLoad` reads saved media + prompt/params for preview/debug.
 - `KCP_KeyframePromoteToAsset` promotes a chosen set item to `assets(type=keyframe)` with provenance in `json_fields`.
+=======
