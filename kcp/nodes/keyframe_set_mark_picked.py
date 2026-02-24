@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from kcp.db.paths import normalize_db_path, with_projectinit_db_path_tip
 from pathlib import Path
 
 from kcp.db.repo import connect, set_picked_index
@@ -26,6 +27,10 @@ class KCP_KeyframeSetMarkPicked:
     CATEGORY = "KCP"
 
     def run(self, db_path: str, set_id: str, picked_index: int, notes: str = ""):
+        try:
+            conn = connect(normalize_db_path(db_path))
+        except Exception as e:
+            raise with_projectinit_db_path_tip(db_path, e) from e
         conn = connect(Path(db_path))
         try:
             row = set_picked_index(conn, set_id, picked_index, notes)

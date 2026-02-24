@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from kcp.db.paths import normalize_db_path, with_projectinit_db_path_tip
 from pathlib import Path
 
 from kcp.db.repo import connect, get_stack_by_name, list_stack_names, save_stack
@@ -10,6 +11,7 @@ from kcp.util.json_utils import parse_json_object
 def _safe_stack_choices(db_path: str, include_archived: bool, refresh_token: int) -> list[str]:
     _ = refresh_token
     try:
+        dbp = normalize_db_path(db_path)
         dbp = Path(db_path)
         if not dbp.exists():
             return [""]
@@ -49,6 +51,10 @@ class KCP_StackSave:
     CATEGORY = "KCP"
 
     def run(self, db_path, stack_name, character_id, environment_id, action_id, camera_id, lighting_id, style_id, json_overrides):
+        try:
+            conn = connect(normalize_db_path(db_path))
+        except Exception as e:
+            raise with_projectinit_db_path_tip(db_path, e) from e
         conn = connect(Path(db_path))
         try:
             stack_id = save_stack(
@@ -129,6 +135,12 @@ class KCP_StackPick:
     def run(self, db_path, stack_name, include_archived=False, refresh_token=0, strict=False):
         _ = refresh_token
         if (stack_name is None or str(stack_name).strip() == "") and not strict:
+            return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"code": "kcp_stack_no_selection"}))
+
+        try:
+            conn = connect(normalize_db_path(db_path))
+        except Exception as e:
+            raise with_projectinit_db_path_tip(db_path, e) from e
             return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "no stack selected"}))
 
         _ = refresh_token
@@ -146,6 +158,9 @@ class KCP_StackPick:
             if not srow:
                 if strict:
                     raise RuntimeError("kcp_stack_not_found")
+                return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"code": "kcp_stack_not_found"}))
+
+            missing_refs = []
                 return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "stack not found"}))
                 raise RuntimeError("kcp_stack_not_found")
 
@@ -153,6 +168,31 @@ class KCP_StackPick:
                 if not asset_id:
                     return ""
                 row = conn.execute("SELECT positive_fragment FROM assets WHERE id = ?", (asset_id,)).fetchone()
+                if row is None:
+                    missing_refs.append(asset_id)
+                return row[0] if row else ""
+
+            slot_ids = {
+                "character_id": srow["character_id"],
+                "environment_id": srow["environment_id"],
+                "action_id": srow["action_id"],
+                "camera_id": srow["camera_id"],
+                "lighting_id": srow["lighting_id"],
+                "style_id": srow["style_id"],
+            }
+            missing_slot_refs = []
+            for slot, asset_id in slot_ids.items():
+                if asset_id and conn.execute("SELECT id FROM assets WHERE id = ?", (asset_id,)).fetchone() is None:
+                    missing_slot_refs.append({"slot": slot, "asset_id": asset_id})
+
+            if missing_slot_refs and strict:
+                first = missing_slot_refs[0]
+                raise RuntimeError(f"kcp_stack_ref_missing: slot={first['slot']} asset_id={first['asset_id']}")
+
+            stack_json = {k: srow[k] for k in srow.keys()}
+            warning_json = "{}"
+            if missing_slot_refs:
+                warning_json = json.dumps({"code": "kcp_stack_ref_missing", "missing_refs": missing_slot_refs})
                 return row[0] if row else ""
 
             stack_json = {k: srow[k] for k in srow.keys()}
@@ -167,6 +207,7 @@ class KCP_StackPick:
                 frag(srow["style_id"]),
                 None,
                 None,
+                warning_json,
                 "{}",
             )
         finally:

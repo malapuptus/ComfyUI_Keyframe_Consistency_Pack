@@ -1,3 +1,5 @@
+> Canonical ticket format: `tickets/TEMPLATE.md`.
+
 Ticket KCP-001 — Initialize DB pathing and migration bootstrap
 Goal (1 sentence): Implement project initialization that creates KCP filesystem layout and migrates SQLite schema to latest.
 Scope:
@@ -211,3 +213,103 @@ Notes / implementation hints:
 - Keep docs append-only where specified.
 Risks:
 - Receipt output drift from expected key labels.
+
+Ticket KCP-023 — Fix VariantPack UI constraints and defaults
+Status: DONE
+Goal (1 sentence): Make KCP_VariantPack inputs sane and hard-to-misuse (seed range, defaults, JSON field defaults).
+Acceptance criteria:
+- base_seed supports standard 32-bit positive seed range.
+- sampler/scheduler defaults are non-JSON prompt-friendly defaults.
+- verify completes with receipt KCP-023.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-023"
+
+Ticket KCP-024 — Guardrail db_path inputs
+Status: DONE
+Goal (1 sentence): Validate db_path inputs and raise actionable errors for directory and missing-parent cases.
+Acceptance criteria:
+- directory db_path raises kcp_db_path_is_directory.
+- missing parent raises kcp_db_path_parent_missing.
+- verify completes with receipt KCP-024.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-024"
+
+Ticket KCP-025 — Auto-migrate on DB connect
+Status: DONE
+Goal (1 sentence): Ensure connect() applies migrations so required tables exist on fresh sqlite files.
+Acceptance criteria:
+- opening empty sqlite file creates v1 schema.
+- keyframe_set_items table exists after connect.
+- verify completes with receipt KCP-025.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-025"
+
+Ticket KCP-026 — Diagnose SaveImageIntoSetItem failures
+Status: DONE
+Goal (1 sentence): Include resolved paths and underlying exception details in set-item image write errors.
+Acceptance criteria:
+- failure message contains image_path and err fields.
+- failure message includes set_id/idx context.
+- verify completes with receipt KCP-026.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-026"
+
+Ticket KCP-027 — Fix SaveImageIntoSetItem root consistency
+Status: DONE
+Goal (1 sentence): Ensure set-item image writes use canonical KCP root resolution aligned with ProjectInit behavior.
+Acceptance criteria:
+- relative output/kcp root resolves under ComfyUI output directory when available.
+- no ad-hoc cwd-only write root pathing for set-item save path.
+- verify completes with receipt KCP-027.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-027"
+
+Ticket KCP-028 — Promote ordering dependency input
+Status: DONE
+Goal (1 sentence): Add dependency input to promote node so workflows can enforce save-before-promote ordering.
+Acceptance criteria:
+- promote input contract includes depends_on_item_json.
+- dependency input can be wired to create execution order edge.
+- verify completes with receipt KCP-028.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-028"
+
+Ticket KCP-029 — End-to-end persistence smoke
+Status: DONE
+Goal (1 sentence): Add synthetic end-to-end smoke covering set save-image, load, and promote flow.
+Acceptance criteria:
+- smoke confirms DB updates and filesystem outputs in one flow.
+- no external model/runtime dependencies required for smoke.
+- verify completes with receipt KCP-029.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-029"
+
+Ticket KCP-030 — Fix KeyframeSetSave UI constraints and defaults
+Status: DONE
+Goal (1 sentence): Add safe UI bounds to KeyframeSetSave seed/size/picked_index inputs while preserving DB semantics.
+Acceptance criteria:
+- base_seed min/max bounds are present.
+- width/height min 64 and picked_index min/max bounds are present.
+- verify completes with receipt KCP-030.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-030"
+
+Ticket KCP-031 — Make Promote dependency input optional
+Status: DONE
+Goal (1 sentence): Make depends_on_item_json optional in promote INPUT_TYPES while keeping behavior unchanged.
+Acceptance criteria:
+- depends_on_item_json is under optional inputs.
+- promote still runs when dependency input is not connected.
+- verify completes with receipt KCP-031.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-031"
+
+Ticket KCP-032 — Add canonical ticket template file
+Status: DONE
+Goal (1 sentence): Add explicit canonical ticket template and references to prevent ticket structure drift.
+Acceptance criteria:
+- tickets/TEMPLATE.md exists with required sections and NONE rule.
+- KCP_TICKETS and AGENTS reference the template.
+- verify completes with receipt KCP-032.
+Evidence needed (what to paste/verify):
+- tools/verify.py --receipt "KCP-032"

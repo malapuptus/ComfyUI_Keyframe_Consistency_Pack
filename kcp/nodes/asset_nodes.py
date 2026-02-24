@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
 from pathlib import Path
 
 from kcp.db.repo import (
@@ -21,6 +22,7 @@ from kcp.util.json_utils import validate_asset_json_fields
 def _safe_asset_choices(db_path: str, asset_type: str, include_archived: bool, refresh_token: int) -> list[str]:
     _ = refresh_token
     try:
+        dbp = normalize_db_path(db_path)
         dbp = Path(db_path)
         if not dbp.exists():
             return [""]
@@ -76,6 +78,14 @@ class KCP_AssetSave:
             raise RuntimeError(f"kcp_asset_validation_failed: {e}") from e
 
         tags = [t.strip() for t in tags_csv.split(",") if t.strip()]
+        try:
+            dbp = normalize_db_path(db_path)
+            root = dbp.parent.parent
+            conn = connect(dbp)
+        except Exception as e:
+            raise with_projectinit_db_path_tip(db_path, e) from e
+        warnings = []
+        thumb_image_out = image
         dbp = Path(db_path)
         root = dbp.parent.parent
         conn = connect(dbp)
@@ -154,6 +164,7 @@ class KCP_AssetSave:
                 try:
                     if make_thumbnail(image_path, thumb_path, max_px=384):
                         thumb_rel = str(thumb_path.relative_to(root))
+                        thumb_image_out = load_image_as_comfy(thumb_path)
                         thumb_image_out = load_image_as_comfy(thumb_path
                     else:
                         warnings.append("thumbnail generation failed; saved original image without thumbnail")
@@ -253,6 +264,12 @@ class KCP_AssetPick:
     def run(self, db_path, asset_type, asset_name, include_archived=False, refresh_token=0, strict=False):
         _ = refresh_token
         if (asset_name is None or str(asset_name).strip() == "") and not strict:
+            return ("", "", "", "{}", None, None, json.dumps({"code": "kcp_asset_no_selection"}))
+
+        try:
+            conn = connect(normalize_db_path(db_path))
+        except Exception as e:
+            raise with_projectinit_db_path_tip(db_path, e) from e
             return ("", "", "", "{}", None, None, json.dumps({"warning": "no asset selected"}))
 
         _ = refresh_token
@@ -270,6 +287,31 @@ class KCP_AssetPick:
             if not row:
                 if strict:
                     raise RuntimeError("kcp_asset_not_found")
+                return ("", "", "", "{}", None, None, json.dumps({"code": "kcp_asset_not_found"}))
+            root = kcp_root_from_db_path(db_path)
+            missing_paths = []
+            if row["image_path"]:
+                image_path = root / row["image_path"]
+                if not image_path.exists():
+                    missing_paths.append(str(image_path.resolve()))
+            if row["thumb_path"]:
+                thumb_path = root / row["thumb_path"]
+                if not thumb_path.exists():
+                    missing_paths.append(str(thumb_path.resolve()))
+
+            if missing_paths:
+                if strict:
+                    raise RuntimeError("kcp_asset_image_missing")
+                warning = {
+                    "code": "kcp_asset_media_missing",
+                    "asset_id": row["id"],
+                    "asset_type": asset_type,
+                    "asset_name": asset_name,
+                    "missing_paths": missing_paths,
+                }
+                return (row["id"], row["positive_fragment"], row["negative_fragment"], row["json_fields"], None, None, json.dumps(warning))
+
+            return (row["id"], row["positive_fragment"], row["negative_fragment"], row["json_fields"], None, None, "{}")
                 return ("", "", "", "{}", None, None, json.dumps({"warning": "asset not found"}))
                 raise RuntimeError("kcp_asset_not_found")
             root = Path(db_path).parent.parent

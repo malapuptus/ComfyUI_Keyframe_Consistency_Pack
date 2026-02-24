@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from kcp.db.paths import normalize_db_path, with_projectinit_db_path_tip
 from pathlib import Path
 
 from kcp.db.repo import add_keyframe_set_item, connect, create_keyframe_set
@@ -19,6 +20,11 @@ class KCP_KeyframeSetSave:
                 "variant_policy_id": ("STRING", {"default": ""}),
                 "variant_policy_json": ("STRING", {"default": "{}", "multiline": True}),
                 "variant_list_json": ("STRING", {"default": "{}", "multiline": True}),
+                "base_seed": ("INT", {"default": 0, "min": 0, "max": 2147483647}),
+                "width": ("INT", {"default": 1024, "min": 64}),
+                "height": ("INT", {"default": 1024, "min": 64}),
+                "set_name": ("STRING", {"default": ""}),
+                "picked_index": ("INT", {"default": -1, "min": -1, "max": 255}),
                 "base_seed": ("INT", {"default": 0}),
                 "width": ("INT", {"default": 1024}),
                 "height": ("INT", {"default": 1024}),
@@ -34,6 +40,10 @@ class KCP_KeyframeSetSave:
     CATEGORY = "KCP"
 
     def run(self, db_path, stack_id, variant_policy_id, variant_policy_json, variant_list_json, base_seed, width, height, set_name="", picked_index=-1, notes=""):
+        try:
+            conn = connect(normalize_db_path(db_path))
+        except Exception as e:
+            raise with_projectinit_db_path_tip(db_path, e) from e
         conn = connect(Path(db_path))
         try:
             policy_payload = parse_json_object(variant_policy_json, default={})

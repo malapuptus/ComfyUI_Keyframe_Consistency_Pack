@@ -11,6 +11,7 @@ This repository contains the standalone ComfyUI custom node pack **Keyframe Cons
 - Avoid broad refactors and incidental formatting changes.
 - Runtime dependencies are limited to Python stdlib and optional Pillow.
 - Use `pathlib` for all paths.
+- New tickets must follow `tickets/TEMPLATE.md` exactly; all sections are required (use `NONE` when not applicable).
 
 ## Verify workflow
 Run:

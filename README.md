@@ -12,7 +12,6 @@ Install dependencies in your ComfyUI Python environment:
 
 ```bash
 python -m pip install -r requirements.txt
-=======
 Install Pillow in your ComfyUI Python environment:
 
 ```bash
@@ -27,9 +26,9 @@ Behavior when Pillow is missing:
 ## Thumbnail behavior
 - Thumbnail format: `webp`
 - Default max size: `384px`
+- If thumbnail generation fails, KCP saves the original PNG and appends a warning in `asset_json.warnings`.
 
 - If thumbnail generation fails, KCP saves the original PNG and appends a warning in `asset_json.warnings`.
-=======
 - If thumbnail generation fails, KCP still saves the original PNG and appends a warning in `asset_json.warnings`.
 
 ## json_fields validation (asset schema)
@@ -109,6 +108,7 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - Use `KCP_KeyframeSetItemSaveImage` to attach a rendered IMAGE to `(set_id, idx)` and persist media under `sets/<set_id>/<idx>.*`.
 - Use `KCP_KeyframeSetItemLoad` to preview/debug saved set items (image + prompts + gen params).
 - Use `KCP_KeyframePromoteToAsset` to promote a winning set item into a reusable `keyframe` asset with provenance in `json_fields`.
+- For single-queue ordering, wire `KCP_KeyframeSetItemSaveImage.item_json` -> `KCP_KeyframePromoteToAsset.depends_on_item_json` to enforce execution dependency.
 
 
 ## Keyframe set media persistence (v1)
@@ -119,4 +119,21 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - With `overwrite=False`, existing media raises `kcp_set_item_media_exists`.
 - `KCP_KeyframeSetItemLoad` reads saved media + prompt/params for preview/debug.
 - `KCP_KeyframePromoteToAsset` promotes a chosen set item to `assets(type=keyframe)` with provenance in `json_fields`.
-=======
+
+
+## Troubleshooting db_path
+- Expected `db_path` pattern is `.../output/kcp/db/kcp.sqlite` (or another real sqlite file path).
+- If you point `db_path` at a directory (for example `.../output/kcp`), nodes raise: `kcp_db_path_is_directory: expected .../db/kcp.sqlite`.
+- If the parent directory does not exist, nodes raise: `kcp_db_path_parent_missing: <parent>`.
+
+## db_path: do this every time
+- Always wire `KCP_ProjectInit.db_path` into every DB-backed KCP node.
+- Canonical relative example: `output/kcp/db/kcp.sqlite`
+- Canonical Windows absolute example: `C:\ComfyUI\output\kcp\db\kcp.sqlite`
+
+## Common errors
+- `kcp_db_path_is_directory`: you passed a folder like `.../output/kcp` where a sqlite file path is required.
+- `kcp_db_path_parent_missing`: the parent directory for the sqlite file does not exist.
+- `kcp_io_write_failed`: image/thumb write failed; current diagnostics include `root=`, `image_path=`, and `err=`.
+
+SaveImage format note: invalid `format` values are coerced to `webp`.

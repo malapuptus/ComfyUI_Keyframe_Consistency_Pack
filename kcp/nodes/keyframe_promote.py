@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+
+from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
 from pathlib import Path
 
 from kcp.db.repo import connect, create_asset, get_asset_by_type_name, get_keyframe_set, get_set_item
@@ -24,6 +26,10 @@ class KCP_KeyframePromoteToAsset:
                 "description": ("STRING", {"default": ""}),
                 "tags_csv": ("STRING", {"default": ""}),
                 "save_mode": (["new", "overwrite_by_name"],),
+            },
+            "optional": {
+                "depends_on_item_json": ("STRING", {"default": ""}),
+            },
             }
         }
 
@@ -32,6 +38,27 @@ class KCP_KeyframePromoteToAsset:
     FUNCTION = "run"
     CATEGORY = "KCP"
 
+    def run(
+        self,
+        db_path: str,
+        set_id: str,
+        idx: int,
+        name: str,
+        description: str = "",
+        tags_csv: str = "",
+        save_mode: str = "new",
+        depends_on_item_json: str = "",
+    ):
+        _ = depends_on_item_json
+        if not pillow_available():
+            raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
+
+        try:
+            dbp = normalize_db_path(db_path)
+            root = kcp_root_from_db_path(db_path)
+            conn = connect(dbp)
+        except Exception as e:
+            raise with_projectinit_db_path_tip(db_path, e) from e
     def run(self, db_path: str, set_id: str, idx: int, name: str, description: str = "", tags_csv: str = "", save_mode: str = "new"):
         if not pillow_available():
             raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
