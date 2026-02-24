@@ -4,6 +4,8 @@ import json
 import os
 
 from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
+from pathlib import Path
+
 from kcp.db.repo import connect, get_set_item, update_set_item_media
 from kcp.util.image_io import make_thumbnail, pillow_available, save_comfy_image_atomic
 
@@ -84,6 +86,35 @@ class KCP_KeyframeSetItemSaveImage:
                     f"kcp_io_write_failed: set_id={set_id} idx={idx} root={root} "
                     f"image_path={image_abs} thumb_path={thumb_abs} err={e!r}"
                 ) from e
+        dbp = Path(db_path)
+        root = dbp.parent.parent
+        image_rel = f"sets/{set_id}/{idx}.{ext}"
+        thumb_rel = f"sets/{set_id}/{idx}_thumb.webp"
+        image_path = root / image_rel
+        thumb_path = root / thumb_rel
+
+        conn = connect(dbp)
+        try:
+            row = get_set_item(conn, set_id, idx)
+            if row is None:
+                raise RuntimeError("kcp_set_item_not_found")
+
+            if (image_path.exists() or thumb_path.exists()) and not overwrite:
+                raise RuntimeError("kcp_set_item_media_exists")
+
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                ok = save_comfy_image_atomic(image, image_path, fmt=encode_fmt)
+            except Exception as e:
+                if encode_fmt == "WEBP":
+                    raise RuntimeError(f"kcp_io_write_failed: WEBP encoding unsupported by Pillow build: {e}") from e
+                raise
+            if not ok:
+                raise RuntimeError("kcp_io_write_failed: failed to save set item image")
+
+            # v1 decision: if thumb generation fails, reuse full image path
+            if not make_thumbnail(image_path, thumb_path, max_px=384):
+                thumb_rel = image_rel
 
             updated = update_set_item_media(conn, set_id, idx, image_rel, thumb_rel)
             payload = {k: updated[k] for k in updated.keys()}

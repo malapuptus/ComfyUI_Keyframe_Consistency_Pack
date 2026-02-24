@@ -26,6 +26,8 @@ NODE_CLASS_MAPPINGS = {
     "KCP_KeyframeSetItemSaveImage": KCP_KeyframeSetItemSaveImage,
     "KCP_KeyframeSetItemLoad": KCP_KeyframeSetItemLoad,
     "KCP_KeyframePromoteToAsset": KCP_KeyframePromoteToAsset,
+    "KCP_ProjectStatus": KCP_ProjectStatus,
+    "KCP_KeyframeSetSave": KCP_KeyframeSetSave,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {k: k for k in NODE_CLASS_MAPPINGS}
