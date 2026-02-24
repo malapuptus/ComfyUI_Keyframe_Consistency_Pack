@@ -8,6 +8,8 @@ from kcp.util.json_utils import parse_json_object
 
 
 class KCP_KeyframeSetSave:
+    OUTPUT_NODE = True
+
     @classmethod
     def INPUT_TYPES(cls):
         return {

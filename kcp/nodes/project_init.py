@@ -8,6 +8,8 @@ from kcp.db.repo import connect
 
 
 class KCP_ProjectInit:
+    OUTPUT_NODE = True
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -37,6 +39,7 @@ class KCP_ProjectInit:
         status = {
             "ok": True,
             "db_path": str(db_path),
+            "kcp_root_resolved": str(root),
             "schema_version": ver,
             "create_if_missing": bool(create_if_missing),
         }

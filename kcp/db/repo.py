@@ -55,6 +55,94 @@ def create_asset(conn: sqlite3.Connection, payload: dict) -> str:
     return asset_id
 
 
+
+
+def update_asset_by_id(
+    conn: sqlite3.Connection,
+    asset_id: str,
+    *,
+    description: str,
+    tags: list,
+    positive_fragment: str,
+    negative_fragment: str,
+    json_fields: dict,
+    image_path: str = "",
+    thumb_path: str = "",
+    image_hash: str = "",
+    bump_version: bool = False,
+):
+    row = conn.execute("SELECT version FROM assets WHERE id = ?", (asset_id,)).fetchone()
+    if not row:
+        raise ValueError(f"asset not found: {asset_id}")
+    version = int(row[0]) + 1 if bump_version else int(row[0])
+    conn.execute(
+        """
+        UPDATE assets
+        SET description = ?,
+            tags_json = ?,
+            positive_fragment = ?,
+            negative_fragment = ?,
+            json_fields = ?,
+            image_path = ?,
+            thumb_path = ?,
+            image_hash = ?,
+            version = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            description,
+            json.dumps(tags),
+            positive_fragment,
+            negative_fragment,
+            json.dumps(json_fields),
+            image_path,
+            thumb_path,
+            image_hash,
+            version,
+            now_ms(),
+            asset_id,
+        ),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+
+
+def create_asset_version(
+    conn: sqlite3.Connection,
+    existing_row,
+    new_name: str,
+    *,
+    description: str,
+    tags: list,
+    positive_fragment: str,
+    negative_fragment: str,
+    json_fields: dict,
+    image_path: str = "",
+    thumb_path: str = "",
+    image_hash: str = "",
+) -> str:
+    new_version = int(existing_row["version"]) + 1
+    return create_asset(
+        conn,
+        {
+            "type": existing_row["type"],
+            "name": new_name,
+            "description": description,
+            "tags": tags,
+            "positive_fragment": positive_fragment,
+            "negative_fragment": negative_fragment,
+            "json_fields": json_fields,
+            "thumb_path": thumb_path,
+            "image_path": image_path,
+            "image_hash": image_hash,
+            "version": new_version,
+            "parent_id": existing_row["id"],
+            "is_archived": int(existing_row["is_archived"]),
+        },
+    )
+
+
 def get_asset_by_type_name(conn: sqlite3.Connection, asset_type: str, name: str, include_archived: bool = False):
     q = "SELECT * FROM assets WHERE type = ? AND name = ?"
     args = [asset_type, name]
@@ -182,3 +270,48 @@ def add_keyframe_set_item(conn: sqlite3.Connection, payload: dict) -> str:
     )
     conn.commit()
     return item_id
+
+
+def set_picked_index(conn: sqlite3.Connection, set_id: str, picked_index: int, notes_optional: str | None = None):
+    if int(picked_index) < 0:
+        raise ValueError("picked_index must be >= 0")
+
+    ts = now_ms()
+    if notes_optional is None:
+        conn.execute(
+            "UPDATE keyframe_sets SET picked_index = ?, updated_at = ? WHERE id = ?",
+            (int(picked_index), ts, set_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE keyframe_sets SET picked_index = ?, notes = ?, updated_at = ? WHERE id = ?",
+            (int(picked_index), notes_optional, ts, set_id),
+        )
+    conn.commit()
+    return conn.execute("SELECT * FROM keyframe_sets WHERE id = ?", (set_id,)).fetchone()
+
+
+
+def get_set_item(conn: sqlite3.Connection, set_id: str, idx: int):
+    return conn.execute(
+        "SELECT * FROM keyframe_set_items WHERE set_id = ? AND idx = ?",
+        (set_id, int(idx)),
+    ).fetchone()
+
+
+def get_keyframe_set(conn: sqlite3.Connection, set_id: str):
+    return conn.execute("SELECT * FROM keyframe_sets WHERE id = ?", (set_id,)).fetchone()
+
+
+def update_set_item_media(conn: sqlite3.Connection, set_id: str, idx: int, image_rel: str, thumb_rel: str):
+    if int(idx) < 0:
+        raise ValueError("idx must be >= 0")
+    cur = conn.execute(
+        "UPDATE keyframe_set_items SET image_path = ?, thumb_path = ? WHERE set_id = ? AND idx = ?",
+        (image_rel, thumb_rel, set_id, int(idx)),
+    )
+    if cur.rowcount == 0:
+        conn.rollback()
+        raise ValueError(f"set item not found: set_id={set_id} idx={idx}")
+    conn.commit()
+    return get_set_item(conn, set_id, int(idx))

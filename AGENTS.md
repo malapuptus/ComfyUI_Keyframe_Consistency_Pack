@@ -20,6 +20,9 @@ Run:
 ## Pillow requirements
 - Text-only asset workflows can run without Pillow.
 - Pillow is required for node paths that write images/thumbs.
+- Install dependencies with ComfyUI embedded python:
+  - Portable Windows: `python_embeded\python.exe -m pip install -r requirements.txt`
+  - Other installs: `python -m pip install -r requirements.txt`
 - Install Pillow:
   - `python -m pip install Pillow`
 

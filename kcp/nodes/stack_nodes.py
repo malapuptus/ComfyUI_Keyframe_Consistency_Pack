@@ -7,6 +7,25 @@ from kcp.db.repo import connect, get_stack_by_name, list_stack_names, save_stack
 from kcp.util.json_utils import parse_json_object
 
 
+def _safe_stack_choices(db_path: str, include_archived: bool, refresh_token: int) -> list[str]:
+    _ = refresh_token
+    try:
+        dbp = Path(db_path)
+        if not dbp.exists():
+            return [""]
+        conn = connect(dbp)
+        try:
+            names = list_stack_names(conn, include_archived=include_archived)
+            return names if names else [""]
+        finally:
+            conn.close()
+    except Exception:
+        return [""]
+
+
+class KCP_StackSave:
+    OUTPUT_NODE = True
+
 class KCP_StackSave:
     @classmethod
     def INPUT_TYPES(cls):
@@ -57,6 +76,25 @@ class KCP_StackSave:
 
 class KCP_StackPick:
     @classmethod
+    def INPUT_TYPES(
+        cls,
+        db_path: str = "output/kcp/db/kcp.sqlite",
+        include_archived: bool = False,
+        refresh_token: int = 0,
+        strict: bool = False,
+    ):
+        choices = _safe_stack_choices(db_path, include_archived, refresh_token)
+        return {
+            "required": {
+                "db_path": ("STRING", {"default": db_path}),
+                "stack_name": (choices,),
+                "include_archived": ("BOOLEAN", {"default": include_archived}),
+                "refresh_token": ("INT", {"default": refresh_token}),
+                "strict": ("BOOLEAN", {"default": strict}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "IMAGE", "IMAGE", "STRING")
     def INPUT_TYPES(cls):
         return {
             "required": {
@@ -79,12 +117,20 @@ class KCP_StackPick:
         "style_fragment",
         "environment_thumb",
         "character_thumb",
+        "warning_json",
     )
     FUNCTION = "run"
     CATEGORY = "KCP"
 
     @classmethod
     def list_names(cls, db_path: str, include_archived: bool = False, refresh_token: int = 0):
+        return _safe_stack_choices(db_path, include_archived, refresh_token)
+
+    def run(self, db_path, stack_name, include_archived=False, refresh_token=0, strict=False):
+        _ = refresh_token
+        if (stack_name is None or str(stack_name).strip() == "") and not strict:
+            return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "no stack selected"}))
+
         _ = refresh_token
         conn = connect(Path(db_path))
         try:
@@ -98,6 +144,9 @@ class KCP_StackPick:
         try:
             srow = get_stack_by_name(conn, stack_name, include_archived=include_archived)
             if not srow:
+                if strict:
+                    raise RuntimeError("kcp_stack_not_found")
+                return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "stack not found"}))
                 raise RuntimeError("kcp_stack_not_found")
 
             def frag(asset_id: str | None) -> str:
@@ -118,6 +167,7 @@ class KCP_StackPick:
                 frag(srow["style_id"]),
                 None,
                 None,
+                "{}",
             )
         finally:
             conn.close()
