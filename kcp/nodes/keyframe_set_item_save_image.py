@@ -34,11 +34,24 @@ class KCP_KeyframeSetItemSaveImage:
     FUNCTION = "run"
     CATEGORY = "KCP"
 
-    def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True):
+    def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True, batch_index=0):
         if not pillow_available():
             raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
         if idx < 0:
             raise RuntimeError("kcp_set_item_invalid_idx")
+
+        # Select one image from a batch if needed
+        try:
+            shape = getattr(image, "shape", None)
+            if shape is not None and len(shape) == 4:
+                b = int(shape[0])
+                bi = int(batch_index or 0)
+                if bi < 0 or bi >= b:
+                    raise RuntimeError(f"kcp_batch_index_oob: batch_index={bi} batch_size={b}")
+                image = image[bi]
+        except Exception:
+            # If shape introspection fails, keep original; downstream save will raise if invalid.
+            pass
 
         ext = (format or "webp").lower().strip(".")
         if ext not in {"webp", "png"}:
