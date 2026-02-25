@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from kcp.db.paths import normalize_db_path, with_projectinit_db_path_tip
+from pathlib import Path
+
 from kcp.db.repo import connect, get_stack_by_name, list_stack_names, save_stack
 from kcp.util.json_utils import parse_json_object
 
@@ -10,6 +12,7 @@ def _safe_stack_choices(db_path: str, include_archived: bool, refresh_token: int
     _ = refresh_token
     try:
         dbp = normalize_db_path(db_path)
+        dbp = Path(db_path)
         if not dbp.exists():
             return [""]
         conn = connect(dbp)
@@ -25,6 +28,7 @@ def _safe_stack_choices(db_path: str, include_archived: bool, refresh_token: int
 class KCP_StackSave:
     OUTPUT_NODE = True
 
+class KCP_StackSave:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -51,6 +55,7 @@ class KCP_StackSave:
             conn = connect(normalize_db_path(db_path))
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
+        conn = connect(Path(db_path))
         try:
             stack_id = save_stack(
                 conn,
@@ -96,6 +101,17 @@ class KCP_StackPick:
         }
 
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "IMAGE", "IMAGE", "STRING")
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "db_path": ("STRING", {"default": "output/kcp/db/kcp.sqlite"}),
+                "stack_name": ("STRING", {"default": ""}),
+                "include_archived": ("BOOLEAN", {"default": False}),
+                "refresh_token": ("INT", {"default": 0}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "IMAGE", "IMAGE")
     RETURN_NAMES = (
         "stack_id",
         "stack_json",
@@ -125,6 +141,18 @@ class KCP_StackPick:
             conn = connect(normalize_db_path(db_path))
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
+            return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "no stack selected"}))
+
+        _ = refresh_token
+        conn = connect(Path(db_path))
+        try:
+            return list_stack_names(conn, include_archived=include_archived)
+        finally:
+            conn.close()
+
+    def run(self, db_path, stack_name, include_archived=False, refresh_token=0):
+        _ = refresh_token
+        conn = connect(Path(db_path))
         try:
             srow = get_stack_by_name(conn, stack_name, include_archived=include_archived)
             if not srow:
@@ -133,6 +161,8 @@ class KCP_StackPick:
                 return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"code": "kcp_stack_not_found"}))
 
             missing_refs = []
+                return ("", "{}", "", "", "", "", "", "", None, None, json.dumps({"warning": "stack not found"}))
+                raise RuntimeError("kcp_stack_not_found")
 
             def frag(asset_id: str | None) -> str:
                 if not asset_id:
@@ -163,6 +193,9 @@ class KCP_StackPick:
             warning_json = "{}"
             if missing_slot_refs:
                 warning_json = json.dumps({"code": "kcp_stack_ref_missing", "missing_refs": missing_slot_refs})
+                return row[0] if row else ""
+
+            stack_json = {k: srow[k] for k in srow.keys()}
             return (
                 srow["id"],
                 json.dumps(stack_json),
@@ -175,6 +208,7 @@ class KCP_StackPick:
                 None,
                 None,
                 warning_json,
+                "{}",
             )
         finally:
             conn.close()

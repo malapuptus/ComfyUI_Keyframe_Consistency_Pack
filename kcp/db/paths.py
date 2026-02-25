@@ -7,6 +7,8 @@ import warnings
 DEFAULT_DB_PATH_INPUT = "output/kcp/db/kcp.sqlite"
 
 
+
+
 def _comfy_output_dir() -> Path | None:
     try:
         import folder_paths  # type: ignore
@@ -32,6 +34,11 @@ def resolve_root(kcp_root: str) -> Path:
         return (comfy_out / root).resolve()
 
     return (Path.cwd() / root).resolve()
+def resolve_root(kcp_root: str) -> Path:
+    root = Path(kcp_root)
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    return root.resolve()
 
 
 def ensure_layout(root: Path, db_filename: str) -> dict[str, Path]:
