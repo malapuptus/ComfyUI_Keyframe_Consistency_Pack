@@ -49,6 +49,8 @@ class KCP_KeyframeSetItemSaveImage:
                 if bi < 0 or bi >= b:
                     raise RuntimeError(f"kcp_batch_index_oob: batch_index={bi} batch_size={b}")
                 image = image[bi]
+        except RuntimeError:
+            raise
         except Exception:
             # If shape introspection fails, keep original; downstream save will raise if invalid.
             pass
