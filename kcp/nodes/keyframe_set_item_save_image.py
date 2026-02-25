@@ -4,8 +4,6 @@ import json
 import os
 
 from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
-from pathlib import Path
-
 from kcp.db.repo import connect, get_set_item, update_set_item_media
 from kcp.util.image_io import make_thumbnail, pillow_available, save_comfy_image_atomic
 
@@ -28,9 +26,6 @@ class KCP_KeyframeSetItemSaveImage:
                 "image": ("IMAGE",),
                 "format": ("STRING", {"default": "webp"}),
                 "overwrite": ("BOOLEAN", {"default": True}),
-            },
-            "optional": {
-                "batch_index": ("INT", {"default": 0, "min": 0}),
             }
         }
 
@@ -39,32 +34,11 @@ class KCP_KeyframeSetItemSaveImage:
     FUNCTION = "run"
     CATEGORY = "KCP"
 
-    @staticmethod
-    def _select_batch_image(image, batch_index: int):
-        if batch_index <= 0:
-            return image
-
-        data = image
-        if hasattr(data, "detach"):
-            data = data.detach()
-        if hasattr(data, "shape"):
-            shape = tuple(int(x) for x in data.shape)
-            if len(shape) == 4:
-                if batch_index >= shape[0]:
-                    raise RuntimeError(f"kcp_batch_index_oob: batch_index={batch_index} batch={shape[0]}")
-                return image[batch_index : batch_index + 1]
-            if len(shape) == 3:
-                raise RuntimeError(f"kcp_batch_index_oob: batch_index={batch_index} batch=1")
-        return image
-
-    def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True, batch_index: int = 0):
     def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True):
         if not pillow_available():
             raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
         if idx < 0:
             raise RuntimeError("kcp_set_item_invalid_idx")
-
-        selected_image = self._select_batch_image(image, int(batch_index))
 
         ext = (format or "webp").lower().strip(".")
         if ext not in {"webp", "png"}:
@@ -100,7 +74,6 @@ class KCP_KeyframeSetItemSaveImage:
 
             try:
                 image_abs.parent.mkdir(parents=True, exist_ok=True)
-                ok = save_comfy_image_atomic(selected_image, image_abs, fmt=encode_fmt)
                 ok = save_comfy_image_atomic(image, image_abs, fmt=encode_fmt)
                 if not ok:
                     raise RuntimeError("failed to save set item image")
@@ -111,35 +84,6 @@ class KCP_KeyframeSetItemSaveImage:
                     f"kcp_io_write_failed: set_id={set_id} idx={idx} root={root} "
                     f"image_path={image_abs} thumb_path={thumb_abs} err={e!r}"
                 ) from e
-        dbp = Path(db_path)
-        root = dbp.parent.parent
-        image_rel = f"sets/{set_id}/{idx}.{ext}"
-        thumb_rel = f"sets/{set_id}/{idx}_thumb.webp"
-        image_path = root / image_rel
-        thumb_path = root / thumb_rel
-
-        conn = connect(dbp)
-        try:
-            row = get_set_item(conn, set_id, idx)
-            if row is None:
-                raise RuntimeError("kcp_set_item_not_found")
-
-            if (image_path.exists() or thumb_path.exists()) and not overwrite:
-                raise RuntimeError("kcp_set_item_media_exists")
-
-            image_path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                ok = save_comfy_image_atomic(image, image_path, fmt=encode_fmt)
-            except Exception as e:
-                if encode_fmt == "WEBP":
-                    raise RuntimeError(f"kcp_io_write_failed: WEBP encoding unsupported by Pillow build: {e}") from e
-                raise
-            if not ok:
-                raise RuntimeError("kcp_io_write_failed: failed to save set item image")
-
-            # v1 decision: if thumb generation fails, reuse full image path
-            if not make_thumbnail(image_path, thumb_path, max_px=384):
-                thumb_rel = image_rel
 
             updated = update_set_item_media(conn, set_id, idx, image_rel, thumb_rel)
             payload = {k: updated[k] for k in updated.keys()}
