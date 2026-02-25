@@ -124,7 +124,7 @@ class KCP_AssetSave:
                     raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
 
                 image_path = root / "images" / asset_type / asset_id / "original.png"
-                if not save_optional_image(image, image_path, fmt="PNG"):
+                if not save_optional_image(image, image_path):
                     raise RuntimeError("kcp_io_write_failed: failed to save IMAGE input")
 
                 image_rel = str(image_path.relative_to(root))
