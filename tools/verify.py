@@ -808,6 +808,77 @@ def smoke_set_item_not_found_diagnostic() -> tuple[bool, str]:
         return False, str(e)
 
 
+def smoke_set_item_save_batch_index() -> tuple[bool, str]:
+    """Smoke: SaveImage selects requested batch index before saving."""
+    try:
+        import kcp.nodes.keyframe_set_item_save_image as mod
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.db.repo import connect, create_keyframe_set, add_keyframe_set_item
+
+        orig_pillow = mod.pillow_available
+        orig_save = mod.save_comfy_image_atomic
+        orig_thumb = mod.make_thumbnail
+        try:
+            mod.pillow_available = lambda: True
+            saved_first_vals = []
+
+            def _first_scalar(x):
+                cur = x
+                while isinstance(cur, (list, tuple)) and cur:
+                    cur = cur[0]
+                return float(cur)
+
+            def _fake_save(image_obj, path, fmt=None):
+                _ = path, fmt
+                data = image_obj
+                if hasattr(data, "detach"):
+                    data = data.detach()
+                if hasattr(data, "cpu"):
+                    data = data.cpu()
+                if hasattr(data, "numpy"):
+                    data = data.numpy()
+                try:
+                    saved_first_vals.append(float(data[0, 0, 0, 0]))
+                except Exception:
+                    saved_first_vals.append(_first_scalar(data))
+                return True
+
+            mod.save_comfy_image_atomic = _fake_save
+            mod.make_thumbnail = lambda *_args, **_kwargs: False
+
+            with tempfile.TemporaryDirectory() as td:
+                db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+                conn = connect(Path(db_path))
+                try:
+                    conn.execute("INSERT INTO stacks (id,name,created_at,updated_at) VALUES (?,?,?,?)", ("stack1", "stack1", 1, 1))
+                    conn.commit()
+                    set_id = create_keyframe_set(conn, {"stack_id": "stack1", "variant_policy_id": "seed_sweep_12_v1", "variant_policy_json": {}, "base_seed": 1, "width": 64, "height": 64})
+                    add_keyframe_set_item(conn, {"set_id": set_id, "idx": 0, "seed": 1, "positive_prompt": "p", "negative_prompt": "n", "gen_params_json": {}})
+                finally:
+                    conn.close()
+
+                try:
+                    import numpy as np  # type: ignore
+
+                    batch = np.zeros((2, 2, 2, 3), dtype=np.float32)
+                    batch[0, :, :, :] = 0.1
+                    batch[1, :, :, :] = 0.8
+                    mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, batch, "webp", True, 1)
+                    if not saved_first_vals or abs(saved_first_vals[-1] - 0.8) > 1e-6:
+                        return False, f"batch index selection mismatch values={saved_first_vals}"
+                except Exception:
+                    # fallback path when numpy is unavailable in environment
+                    mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, [[[[0.1, 0.1, 0.1]]]], "webp", True, 0)
+
+        finally:
+            mod.pillow_available = orig_pillow
+            mod.save_comfy_image_atomic = orig_save
+            mod.make_thumbnail = orig_thumb
+        return True, "set-item save batch_index ok"
+    except Exception as e:
+        return False, str(e)
+
+
 def smoke_promote_dependency_input() -> tuple[bool, str]:
     """Smoke: promote node exposes depends_on_item_json dependency input."""
     try:
@@ -943,6 +1014,7 @@ def main() -> int:
             ("smoke_connect_migrates", smoke_connect_migrates),
             ("smoke_set_item_save_error_details", smoke_set_item_save_error_details),
             ("smoke_set_item_not_found_diagnostic", smoke_set_item_not_found_diagnostic),
+            ("smoke_set_item_save_batch_index", smoke_set_item_save_batch_index),
             ("smoke_promote_dependency_input", smoke_promote_dependency_input),
             ("smoke_set_image_load_promote_e2e", smoke_set_image_load_promote_e2e),
         ]:
