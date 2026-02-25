@@ -4,8 +4,6 @@ import json
 import sqlite3
 
 from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
-from pathlib import Path
-
 from kcp.db.repo import connect, create_asset, get_asset_by_type_name, get_keyframe_set, get_set_item
 from kcp.util.hashing import sha256_file
 from kcp.util.image_io import load_image_as_comfy, make_thumbnail, pillow_available, save_optional_image
@@ -30,7 +28,6 @@ class KCP_KeyframePromoteToAsset:
             "optional": {
                 "depends_on_item_json": ("STRING", {"default": ""}),
             },
-            }
         }
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -59,13 +56,6 @@ class KCP_KeyframePromoteToAsset:
             conn = connect(dbp)
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
-    def run(self, db_path: str, set_id: str, idx: int, name: str, description: str = "", tags_csv: str = "", save_mode: str = "new"):
-        if not pillow_available():
-            raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
-
-        dbp = Path(db_path)
-        root = dbp.parent.parent
-        conn = connect(dbp)
         try:
             item = get_set_item(conn, set_id, idx)
             if item is None:
