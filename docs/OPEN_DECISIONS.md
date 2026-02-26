@@ -15,4 +15,3 @@
 - Assumption: `KCP_KeyframeSetItemSaveImage` defaults to `format=webp` and stores both image + thumb under `sets/<set_id>/`; if thumb generation fails it reuses image_path as thumb_path.
 - Assumption: `KCP_KeyframeSetItemSaveImage` with `overwrite=False` raises `kcp_set_item_media_exists` when media files already exist.
 - Assumption: `KCP_KeyframeSetItemLoad` with `strict=False` returns `None` image outputs and warning_json inside item_json when media is missing.
-

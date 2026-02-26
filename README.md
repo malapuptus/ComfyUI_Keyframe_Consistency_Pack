@@ -7,15 +7,10 @@ Text-only assets work without Pillow.
 
 Pillow is required for any node path that writes images/thumbnails (for example `KCP_AssetSave` when `image` input is connected).
 
-
 Install dependencies in your ComfyUI Python environment:
 
 ```bash
 python -m pip install -r requirements.txt
-Install Pillow in your ComfyUI Python environment:
-
-```bash
-python -m pip install Pillow
 ```
 
 Behavior when Pillow is missing:
@@ -27,9 +22,6 @@ Behavior when Pillow is missing:
 - Thumbnail format: `webp`
 - Default max size: `384px`
 - If thumbnail generation fails, KCP saves the original PNG and appends a warning in `asset_json.warnings`.
-
-- If thumbnail generation fails, KCP saves the original PNG and appends a warning in `asset_json.warnings`.
-- If thumbnail generation fails, KCP still saves the original PNG and appends a warning in `asset_json.warnings`.
 
 ## json_fields validation (asset schema)
 `KCP_AssetSave` validates non-empty `json_fields` strictly against `kcp/schemas/asset.schema.json`.
@@ -105,6 +97,7 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 
 
 ## Winner promotion addendum (v1)
+- Opinionated on-ramp for batched renders: wire `KSampler` decoded `IMAGE` output -> `KCP_KeyframeSetItemSaveBatch.images` to persist the full batch in one call.
 - Use `KCP_KeyframeSetItemSaveImage` to attach a rendered IMAGE to `(set_id, idx)` and persist media under `sets/<set_id>/<idx>.*`.
 - Use `KCP_KeyframeSetItemLoad` to preview/debug saved set items (image + prompts + gen params).
 - Use `KCP_KeyframePromoteToAsset` to promote a winning set item into a reusable `keyframe` asset with provenance in `json_fields`.
@@ -112,6 +105,8 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 
 
 ## Keyframe set media persistence (v1)
+- `idx` selects which keyframe set item row to update in DB (`keyframe_set_items.idx`).
+- `batch_index` selects which image from the incoming IMAGE batch gets saved for that row (`0` = first image).
 - `KCP_KeyframeSetItemSaveImage` stores rendered item media under:
   - `sets/<set_id>/<idx>.webp` (default format)
   - `sets/<set_id>/<idx>_thumb.webp` (thumb)
@@ -120,6 +115,21 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - `KCP_KeyframeSetItemLoad` reads saved media + prompt/params for preview/debug.
 - `KCP_KeyframePromoteToAsset` promotes a chosen set item to `assets(type=keyframe)` with provenance in `json_fields`.
 
+
+
+## Opinionated On-Ramp: Render & Persist a Variant Pack
+- `KCP_ProjectInit` first; wire `db_path` into every DB-backed KCP node.
+- `KCP_VariantPack` -> `KCP_KeyframeSetSave` to persist set metadata and create `keyframe_set_items`.
+- `KCP_VariantPack.variant_list_json` -> `KCP_VariantUnroll.variant_list_json`.
+- `KCP_VariantUnroll` exposes list outputs (`idx_list`, prompts, seed/steps/cfg/sampler/scheduler/denoise/width/height) and uses ComfyUI list mapping so downstream render nodes run once per variant automatically.
+- Wire `KCP_VariantUnroll.positive_list`/`negative_list` through CLIP encoders and `seed_list` + other params into `KSampler`.
+- `VAE Decode` IMAGE -> `KCP_KeyframeSetItemSaveImage.image`.
+- `KCP_KeyframeSetSave.set_id` -> `KCP_KeyframeSetItemSaveImage.set_id`.
+- `KCP_VariantUnroll.idx_list` -> `KCP_KeyframeSetItemSaveImage.idx`.
+- For full-set persistence in one node call, you can alternatively wire decoded IMAGE batch into `KCP_KeyframeSetItemSaveBatch.images` with `idx_start=0` (recommended for batch tensors).
+- Persist full batch wiring: `KSampler IMAGE -> KCP_KeyframeSetItemSaveBatch.images` (use `idx_start` so batch element `0` maps to set item `idx_start`, element `1` maps to `idx_start+1`, etc.).
+- Terminology: `idx` is the DB item index in `keyframe_set_items`; `batch_index` selects one image inside an incoming IMAGE batch tensor.
+- Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_variant_pack.json`.
 
 ## Troubleshooting db_path
 - Expected `db_path` pattern is `.../output/kcp/db/kcp.sqlite` (or another real sqlite file path).
@@ -137,3 +147,38 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - `kcp_io_write_failed`: image/thumb write failed; current diagnostics include `root=`, `image_path=`, and `err=`.
 
 SaveImage format note: invalid `format` values are coerced to `webp`.
+
+
+## Pick Winner (v1): preview → choose → mark → promote
+- `KCP_KeyframeSetPick.set_id` -> `KCP_KeyframeSetLoadBatch.set_id`
+- `KCP_KeyframeSetItemPick.item_json` -> `KCP_KeyframeSetMarkPicked.item_json`
+- `KCP_KeyframeSetItemPick.item_json` -> `KCP_KeyframePromoteToAsset.item_json`
+- This item_json wiring avoids manual typing of set_id/idx for mark/promote.
+- Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_variant_pack.json`.
+
+## Pick Winner (v1): preview grid → choose idx → mark picked → promote
+- Use `KCP_KeyframeSetPick` to choose a recent set and output `set_id`.
+- Feed `set_id` into `KCP_KeyframeSetLoadBatch` and send `images` (or `thumbs`) to `PreviewImage` to review the saved grid.
+- Use `KCP_KeyframeSetItemPick` to choose a candidate item and output both `idx` and `item_json` (prefer saved media with `only_with_media=True`).
+- Least-typing path: wire `KCP_KeyframeSetItemPick.item_json` → `KCP_KeyframeSetMarkPicked.item_json`, set `picked_index=-1`, and mark is derived automatically.
+- Least-typing path: wire the same `item_json` → `KCP_KeyframePromoteToAsset.item_json`, leave `set_id` blank and `idx=-1`, and promote derives set/item automatically.
+- Optional: use `KCP_KeyframeSetSummary` to print `N items, M saved media, picked=X` and return status JSON for downstream logs.
+- Promote keeps prompt DNA in both `assets.positive_fragment`/`assets.negative_fragment` and `assets.json_fields.prompt.{positive,negative}` and writes media paths on the asset.
+
+
+## Troubleshooting: why nodes don’t appear
+- Confirm the pack root `__init__.py` is present in `ComfyUI/custom_nodes/ComfyUI_Keyframe_Consistency_Pack/` and exports `NODE_CLASS_MAPPINGS`.
+- Clear stale bytecode caches (`__pycache__` folders) after updates/reverts.
+- Quick import sanity check in Comfy Python:
+  - `python -c "import ComfyUI_Keyframe_Consistency_Pack as k; print('KCP_IMPORT_OK', bool(getattr(k, 'NODE_CLASS_MAPPINGS', {})))"`
+- Install dependencies using the same Python environment that runs ComfyUI:
+  - portable: `python_embeded\python.exe -m pip install -r requirements.txt`
+  - other installs: `python -m pip install -r requirements.txt`
+
+## Opinionated On-Ramp: Render → Persist → Pick Winner
+- `VariantPack.variant_list_json -> VariantUnroll.variant_list_json`
+- `VariantUnroll.(positive/negative/seed/steps/cfg/sampler/scheduler/denoise/width/height) -> KSampler inputs`
+- `KSampler IMAGE -> KCP_KeyframeSetItemSaveBatch.images`
+- `KeyframeSetSave.set_id -> KCP_KeyframeSetItemSaveBatch.set_id`
+- `KCP_KeyframeSetPick -> KCP_KeyframeSetLoadBatch -> KCP_KeyframeSetItemPick -> KCP_KeyframeSetMarkPicked -> KCP_KeyframePromoteToAsset`
+- Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_pick_winner.json`.
