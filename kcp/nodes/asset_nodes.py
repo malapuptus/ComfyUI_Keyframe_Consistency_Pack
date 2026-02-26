@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from kcp.db.paths import DEFAULT_DB_PATH_INPUT, kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
+from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
 from kcp.db.repo import (
     ASSET_TYPES,
     connect,
@@ -130,6 +131,7 @@ class KCP_AssetSave:
 
                 image_path = root / "images" / asset_type / asset_id / "original.png"
                 if not save_optional_image(image, image_path, fmt="PNG"):
+                if not save_optional_image(image, image_path):
                     raise RuntimeError("kcp_io_write_failed: failed to save IMAGE input")
 
                 image_rel = str(image_path.relative_to(root))
@@ -200,6 +202,10 @@ class KCP_AssetPick:
         return {
             "required": {
                 "db_path": ("STRING", {"default": effective_db_path}),
+        choices = _safe_asset_choices(db_path, asset_type, include_archived, refresh_token)
+        return {
+            "required": {
+                "db_path": ("STRING", {"default": db_path}),
                 "asset_type": (sorted(ASSET_TYPES),),
                 "asset_name": (choices,),
                 "include_archived": ("BOOLEAN", {"default": include_archived}),

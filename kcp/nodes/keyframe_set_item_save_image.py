@@ -28,6 +28,7 @@ class KCP_KeyframeSetItemSaveImage:
                 "overwrite": ("BOOLEAN", {"default": True}),
                 "batch_index": ("INT", {"default": 0, "min": 0}),
             },
+            }
         }
 
     RETURN_TYPES = ("STRING",)
@@ -54,12 +55,27 @@ class KCP_KeyframeSetItemSaveImage:
         return image
 
     def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True, batch_index: int = 0):
+    def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True, batch_index=0):
         if not pillow_available():
             raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
         if idx < 0:
             raise RuntimeError("kcp_set_item_invalid_idx")
 
         selected_image = self._select_batch_image(image, int(batch_index))
+        # Select one image from a batch if needed
+        try:
+            shape = getattr(image, "shape", None)
+            if shape is not None and len(shape) == 4:
+                b = int(shape[0])
+                bi = int(batch_index or 0)
+                if bi < 0 or bi >= b:
+                    raise RuntimeError(f"kcp_batch_index_oob: batch_index={bi} batch_size={b}")
+                image = image[bi]
+        except RuntimeError:
+            raise
+        except Exception:
+            # If shape introspection fails, keep original; downstream save will raise if invalid.
+            pass
 
         ext = (format or "webp").lower().strip(".")
         if ext not in {"webp", "png"}:
@@ -96,6 +112,7 @@ class KCP_KeyframeSetItemSaveImage:
             try:
                 image_abs.parent.mkdir(parents=True, exist_ok=True)
                 ok = save_comfy_image_atomic(selected_image, image_abs, fmt=encode_fmt)
+                ok = save_comfy_image_atomic(image, image_abs, fmt=encode_fmt)
                 if not ok:
                     raise RuntimeError("failed to save set item image")
                 if not make_thumbnail(image_abs, thumb_abs, max_px=384):

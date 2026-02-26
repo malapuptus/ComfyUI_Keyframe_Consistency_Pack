@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import os
 
 
 def pillow_available() -> bool:
@@ -36,6 +37,8 @@ def comfy_image_to_pil(image_obj: Any):
         return image_obj.convert("RGB")
 
     data = image_obj
+
+    # torch tensor -> numpy (duck-typed; no hard dependency)
     if hasattr(data, "detach"):
         data = data.detach()
     if hasattr(data, "cpu"):
@@ -57,6 +60,7 @@ def comfy_image_to_pil(image_obj: Any):
     if c < 3:
         raise ValueError("IMAGE must have at least 3 channels")
 
+    # Prefer vectorized ndarray operations when available.
     if hasattr(data, "astype") and hasattr(data, "max"):
         arr = data[..., :3]
         max_val = float(arr.max()) if arr.size else 0.0
@@ -65,6 +69,7 @@ def comfy_image_to_pil(image_obj: Any):
         arr = arr.clip(0.0, 255.0).astype("uint8")
         return Image.fromarray(arr, mode="RGB")
 
+    # Fallback list conversion
     if hasattr(data, "tolist"):
         data = data.tolist()
 
@@ -131,6 +136,13 @@ def save_comfy_image_atomic(image_obj: Any, path: Path, fmt: str | None = None) 
     """Save a ComfyUI IMAGE atomically with explicit encoding format.
 
     If fmt is omitted, it is inferred from path suffix (.webp -> WEBP, else PNG).
+def save_comfy_image_atomic(image_obj: Any, out_path: Path, fmt: str | None = None) -> bool:
+    """
+    Save an IMAGE-like object to out_path atomically.
+    - Creates parent dirs.
+    - Writes to a temp file in the same directory, then os.replace().
+    - fmt can be "PNG" or "WEBP". If None, inferred from suffix.
+    Returns True if written.
     """
     if image_obj is None:
         return False
@@ -148,6 +160,63 @@ def save_comfy_image_atomic(image_obj: Any, path: Path, fmt: str | None = None) 
     tmp.replace(path)
     return True
 
+        raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
+
+    from pathlib import Path
+    import os
+    import tempfile
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    encode_fmt = (fmt or ("WEBP" if out_path.suffix.lower() == ".webp" else "PNG")).upper()
+
+    # Use a temp file in the same directory so os.replace is atomic on Windows
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix="kcp_", suffix=out_path.suffix + ".tmp", dir=str(out_path.parent))
+    os.close(tmp_fd)
+    try:
+        img = comfy_image_to_pil(image_obj)
+        img.save(tmp_name, format=encode_fmt)
+        os.replace(tmp_name, str(out_path))
+        return True
+    finally:
+        try:
+            if os.path.exists(tmp_name):
+                os.remove(tmp_name)
+        except Exception:
+            pass
+
+def save_optional_image(image_obj: Any, path: Path) -> bool:
+    """
+    Save IMAGE-like object to disk at `path` (PNG/WEBP inferred from suffix).
+    Returns True if written, False if image_obj is None.
+    """
+    if image_obj is None:
+        return False
+    if not pillow_available():
+        raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
+
+    from pathlib import Path
+    import os
+    import tempfile
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    encode_fmt = "WEBP" if path.suffix.lower() == ".webp" else "PNG"
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix="kcp_", suffix=path.suffix + ".tmp", dir=str(path.parent))
+    os.close(tmp_fd)
+    try:
+        img = comfy_image_to_pil(image_obj)
+        img.save(tmp_name, format=encode_fmt)
+        os.replace(tmp_name, str(path))
+        return True
+    finally:
+        try:
+            if os.path.exists(tmp_name):
+                os.remove(tmp_name)
+        except Exception:
+            pass
 
 def load_image_as_comfy(path: Path):
     if not pillow_available():

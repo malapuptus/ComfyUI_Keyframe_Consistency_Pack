@@ -21,6 +21,28 @@ def _comfy_output_dir() -> Path | None:
 
 def resolve_root(kcp_root: str) -> Path:
     root = Path(kcp_root)
+
+
+def _comfy_output_dir() -> "Path | None":
+    """
+    Return ComfyUI output directory if folder_paths is available.
+
+    IMPORTANT: Do NOT cache. Tests inject sys.modules["folder_paths"].
+    """
+    try:
+        import sys
+        from pathlib import Path
+        fp = sys.modules.get("folder_paths")
+        if fp is not None and hasattr(fp, "get_output_directory"):
+            return Path(fp.get_output_directory())
+        import folder_paths  # type: ignore
+        return Path(folder_paths.get_output_directory())
+    except Exception:
+        return None
+
+def resolve_root(kcp_root: str) -> "Path":
+    from pathlib import Path
+    root = Path(str(kcp_root))
     if root.is_absolute():
         return root.resolve()
 
@@ -33,6 +55,12 @@ def resolve_root(kcp_root: str) -> Path:
 
     return (Path.cwd() / root).resolve()
 
+
+        if len(parts) >= 1 and parts[0].lower() == "output":
+            root = Path(*parts[1:]) if len(parts) > 1 else Path()
+        return (Path(comfy_out) / root).resolve()
+
+    return (Path.cwd() / root).resolve()
 
 def ensure_layout(root: Path, db_filename: str) -> dict[str, Path]:
     db_dir = root / "db"

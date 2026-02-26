@@ -38,6 +38,8 @@ class KCP_ProjectInit:
                     f"kcp_root={root} db_path={db_path} create_if_missing=False. "
                     "Set create_if_missing=True to initialize project folders and DB."
                 )
+        layout = ensure_layout(root, db_filename)
+        db_path = layout["db_path"]
         try:
             conn = connect(db_path)
             ver = migrate(conn)

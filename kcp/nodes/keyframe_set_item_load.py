@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 
 from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
+from pathlib import Path
+
 from kcp.db.repo import connect, get_set_item
 from kcp.util.image_io import load_image_as_comfy
 
@@ -29,6 +31,7 @@ class KCP_KeyframeSetItemLoad:
             conn = connect(normalize_db_path(db_path))
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
+        conn = connect(Path(db_path))
         try:
             row = get_set_item(conn, set_id, idx)
             if row is None:
@@ -45,6 +48,7 @@ class KCP_KeyframeSetItemLoad:
             }
 
             root = kcp_root_from_db_path(db_path)
+            root = Path(db_path).parent.parent
             image = None
             thumb = None
 
