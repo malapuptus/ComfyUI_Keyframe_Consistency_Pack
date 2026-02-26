@@ -26,8 +26,6 @@ class KCP_KeyframeSetItemSaveImage:
                 "image": ("IMAGE",),
                 "format": ("STRING", {"default": "webp"}),
                 "overwrite": ("BOOLEAN", {"default": True}),
-                "batch_index": ("INT", {"default": 0, "min": 0}),
-            },
             }
         }
 
@@ -36,32 +34,12 @@ class KCP_KeyframeSetItemSaveImage:
     FUNCTION = "run"
     CATEGORY = "KCP"
 
-    @staticmethod
-    def _select_batch_image(image, batch_index: int):
-        if batch_index <= 0:
-            return image
-
-        data = image
-        if hasattr(data, "detach"):
-            data = data.detach()
-        if hasattr(data, "shape"):
-            shape = tuple(int(x) for x in data.shape)
-            if len(shape) == 4:
-                if batch_index >= shape[0]:
-                    raise RuntimeError(f"kcp_batch_index_oob: batch_index={batch_index} batch={shape[0]}")
-                return image[batch_index : batch_index + 1]
-            if len(shape) == 3:
-                raise RuntimeError(f"kcp_batch_index_oob: batch_index={batch_index} batch=1")
-        return image
-
-    def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True, batch_index: int = 0):
     def run(self, db_path: str, set_id: str, idx: int, image, format: str = "webp", overwrite: bool = True, batch_index=0):
         if not pillow_available():
             raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
         if idx < 0:
             raise RuntimeError("kcp_set_item_invalid_idx")
 
-        selected_image = self._select_batch_image(image, int(batch_index))
         # Select one image from a batch if needed
         try:
             shape = getattr(image, "shape", None)
@@ -111,7 +89,6 @@ class KCP_KeyframeSetItemSaveImage:
 
             try:
                 image_abs.parent.mkdir(parents=True, exist_ok=True)
-                ok = save_comfy_image_atomic(selected_image, image_abs, fmt=encode_fmt)
                 ok = save_comfy_image_atomic(image, image_abs, fmt=encode_fmt)
                 if not ok:
                     raise RuntimeError("failed to save set item image")
