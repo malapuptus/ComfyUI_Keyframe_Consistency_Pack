@@ -1,0 +1,22 @@
+{
+  "name": "KCP Opinionated On-Ramp: Render Persist Pick Winner",
+  "notes": [
+    "VariantPack.variant_list_json -> VariantUnroll.variant_list_json",
+    "VariantUnroll list outputs -> KSampler inputs (list-mapped)",
+    "KSampler IMAGE -> KCP_KeyframeSetItemSaveBatch.images",
+    "KeyframeSetSave.set_id -> KCP_KeyframeSetItemSaveBatch.set_id",
+    "KCP_KeyframeSetPick -> KCP_KeyframeSetLoadBatch -> KCP_KeyframeSetItemPick -> KCP_KeyframeSetMarkPicked -> KCP_KeyframePromoteToAsset"
+  ],
+  "nodes": [
+    "KCP_VariantPack",
+    "KCP_VariantUnroll",
+    "KCP_KeyframeSetSave",
+    "KSampler",
+    "KCP_KeyframeSetItemSaveBatch",
+    "KCP_KeyframeSetPick",
+    "KCP_KeyframeSetLoadBatch",
+    "KCP_KeyframeSetItemPick",
+    "KCP_KeyframeSetMarkPicked",
+    "KCP_KeyframePromoteToAsset"
+  ]
+}
