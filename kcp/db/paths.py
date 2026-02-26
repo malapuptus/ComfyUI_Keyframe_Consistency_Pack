@@ -7,6 +7,22 @@ import warnings
 DEFAULT_DB_PATH_INPUT = "output/kcp/db/kcp.sqlite"
 
 
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+def _comfy_output_dir() -> Path | None:
+    try:
+        import folder_paths  # type: ignore
+
+        out = folder_paths.get_output_directory()
+        if out:
+            return Path(out).resolve()
+    except Exception:
+        return None
+    return None
+
+
+def resolve_root(kcp_root: str) -> Path:
+    root = Path(kcp_root)
+=======
 
 
 def _comfy_output_dir() -> "Path | None":
@@ -29,18 +45,29 @@ def _comfy_output_dir() -> "Path | None":
 def resolve_root(kcp_root: str) -> "Path":
     from pathlib import Path
     root = Path(str(kcp_root))
+>>>>>>> main
     if root.is_absolute():
         return root.resolve()
 
     comfy_out = _comfy_output_dir()
     if comfy_out is not None:
         parts = root.parts
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+        if len(parts) >= 2 and parts[0].lower() == "output":
+            root = Path(*parts[1:])
+        return (comfy_out / root).resolve()
+
+    return (Path.cwd() / root).resolve()
+
+
+=======
         if len(parts) >= 1 and parts[0].lower() == "output":
             root = Path(*parts[1:]) if len(parts) > 1 else Path()
         return (Path(comfy_out) / root).resolve()
 
     return (Path.cwd() / root).resolve()
 
+>>>>>>> main
 def ensure_layout(root: Path, db_filename: str) -> dict[str, Path]:
     db_dir = root / "db"
     images_dir = root / "images"

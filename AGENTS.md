@@ -24,8 +24,11 @@ Run:
 - Install dependencies with ComfyUI embedded python:
   - Portable Windows: `python_embeded\python.exe -m pip install -r requirements.txt`
   - Other installs: `python -m pip install -r requirements.txt`
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
 - Install Pillow:
   - `python -m pip install Pillow`
+>>>>>>> main
 
 ## Local ComfyUI install (manual)
 1. Copy this folder into `ComfyUI/custom_nodes/ComfyUI_Keyframe_Consistency_Pack`.

@@ -27,8 +27,22 @@ class KCP_ProjectInit:
 
     def run(self, kcp_root: str, db_filename: str, create_if_missing: bool = True):
         root = resolve_root(kcp_root)
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+        if create_if_missing:
+            layout = ensure_layout(root, db_filename)
+            db_path = layout["db_path"]
+        else:
+            db_path = root / "db" / db_filename
+            if not root.exists() or not (root / "db").exists() or not db_path.exists():
+                raise RuntimeError(
+                    "kcp_project_missing: "
+                    f"kcp_root={root} db_path={db_path} create_if_missing=False. "
+                    "Set create_if_missing=True to initialize project folders and DB."
+                )
+=======
         layout = ensure_layout(root, db_filename)
         db_path = layout["db_path"]
+>>>>>>> main
         try:
             conn = connect(db_path)
             ver = migrate(conn)

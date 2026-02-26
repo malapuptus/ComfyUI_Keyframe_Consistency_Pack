@@ -210,6 +210,10 @@ def load_image_as_comfy(path: Path):
         return pil_to_comfy_image(img)
 
 
+def save_optional_image(image_obj: Any, path: Path, fmt: str | None = None) -> bool:
+    return save_comfy_image_atomic(image_obj, path, fmt=fmt)
+
+
 def make_thumbnail(source: Path, target: Path, max_px: int = 384) -> bool:
     if not pillow_available() or not source.exists():
         return False
