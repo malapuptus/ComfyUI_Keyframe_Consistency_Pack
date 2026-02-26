@@ -112,6 +112,8 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 
 
 ## Keyframe set media persistence (v1)
+- `idx` selects which keyframe set item row to update in DB (`keyframe_set_items.idx`).
+- `batch_index` selects which image from the incoming IMAGE batch gets saved for that row (`0` = first image).
 - `KCP_KeyframeSetItemSaveImage` stores rendered item media under:
   - `sets/<set_id>/<idx>.webp` (default format)
   - `sets/<set_id>/<idx>_thumb.webp` (thumb)

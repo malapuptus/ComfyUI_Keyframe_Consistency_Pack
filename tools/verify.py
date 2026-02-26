@@ -96,6 +96,93 @@ def smoke_asset_thumb() -> tuple[bool, str]:
         asset_nodes.load_image_as_comfy = original_load_image_as_comfy
 
 
+def smoke_asset_overwrite_preserves_media_without_image() -> tuple[bool, str]:
+    """Smoke: overwrite_by_name with image=None preserves existing media fields."""
+    from kcp.nodes.project_init import KCP_ProjectInit
+    from kcp.nodes import asset_nodes
+
+    original_pillow_available = asset_nodes.pillow_available
+    original_save_optional_image = asset_nodes.save_optional_image
+    original_make_thumbnail = asset_nodes.make_thumbnail
+    original_load_image_as_comfy = asset_nodes.load_image_as_comfy
+
+    def _fake_save_optional_image(_image, path: Path, fmt: str | None = None) -> bool:
+        _ = fmt
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"fake")
+        return True
+
+    try:
+        asset_nodes.pillow_available = lambda: True
+        asset_nodes.save_optional_image = _fake_save_optional_image
+        asset_nodes.make_thumbnail = lambda *_args, **_kwargs: False
+        asset_nodes.load_image_as_comfy = lambda *_args, **_kwargs: [[[[1.0, 0.0, 0.0]]]]
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "kcp"
+            db_path, _, _ = KCP_ProjectInit().run(str(root), "kcp.sqlite", True)
+            image_input = [[[[1.0, 0.0, 0.0]]]]
+            _, _, first_asset_json = asset_nodes.KCP_AssetSave().run(
+                db_path,
+                "character",
+                "overwrite_preserve",
+                "",
+                "positive",
+                "",
+                "",
+                "",
+                "new",
+                image_input,
+            )
+            first_payload = json.loads(first_asset_json)
+            _, _, second_asset_json = asset_nodes.KCP_AssetSave().run(
+                db_path,
+                "character",
+                "overwrite_preserve",
+                "updated",
+                "positive2",
+                "",
+                "",
+                "",
+                "overwrite_by_name",
+                None,
+            )
+            second_payload = json.loads(second_asset_json)
+            if second_payload.get("image_path") != first_payload.get("image_path"):
+                return False, "image_path was cleared on overwrite_by_name with no image"
+            if second_payload.get("thumb_path") != first_payload.get("thumb_path"):
+                return False, "thumb_path was cleared on overwrite_by_name with no image"
+        return True, "asset overwrite preserves media when image is omitted"
+    except Exception as e:
+        return False, str(e)
+    finally:
+        asset_nodes.pillow_available = original_pillow_available
+        asset_nodes.save_optional_image = original_save_optional_image
+        asset_nodes.make_thumbnail = original_make_thumbnail
+        asset_nodes.load_image_as_comfy = original_load_image_as_comfy
+
+
+def smoke_project_init_respects_create_if_missing() -> tuple[bool, str]:
+    """Smoke: ProjectInit create_if_missing=False does not create missing layout/DB."""
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "missing_kcp"
+            try:
+                KCP_ProjectInit().run(str(root), "kcp.sqlite", False)
+                return False, "expected kcp_project_missing for create_if_missing=False"
+            except RuntimeError as e:
+                msg = str(e)
+                if "kcp_project_missing" not in msg:
+                    return False, f"unexpected error: {msg}"
+                if root.exists():
+                    return False, "root directory was created despite create_if_missing=False"
+        return True, "project init respects create_if_missing=False"
+    except Exception as e:
+        return False, str(e)
+
+
 def smoke_variant_pick() -> tuple[bool, str]:
     """Smoke: build a variant list and ensure VariantPick returns scalar outputs."""
     try:
@@ -742,6 +829,9 @@ def smoke_set_item_save_error_details() -> tuple[bool, str]:
     try:
         import kcp.nodes.keyframe_set_item_save_image as mod
         from kcp.nodes.project_init import KCP_ProjectInit
+        in_types = mod.KCP_KeyframeSetItemSaveImage.INPUT_TYPES()
+        if "batch_index" not in in_types.get("required", {}):
+            return False, f"batch_index not in required inputs: {in_types}"
         from kcp.db.repo import connect, create_keyframe_set, add_keyframe_set_item
 
         orig_pillow = mod.pillow_available
@@ -866,6 +956,12 @@ def smoke_set_item_save_batch_index() -> tuple[bool, str]:
                     mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, batch, "webp", True, 1)
                     if not saved_first_vals or abs(saved_first_vals[-1] - 0.8) > 1e-6:
                         return False, f"batch index selection mismatch values={saved_first_vals}"
+                    try:
+                        mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, batch, "webp", True, 999)
+                        return False, "expected kcp_batch_index_oob"
+                    except RuntimeError as e:
+                        if "kcp_batch_index_oob" not in str(e):
+                            return False, f"unexpected oob error: {e}"
                 except Exception:
                     # fallback path when numpy is unavailable in environment
                     mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, [[[[0.1, 0.1, 0.1]]]], "webp", True, 0)
@@ -875,6 +971,122 @@ def smoke_set_item_save_batch_index() -> tuple[bool, str]:
             mod.save_comfy_image_atomic = orig_save
             mod.make_thumbnail = orig_thumb
         return True, "set-item save batch_index ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_promote_prompt_dna() -> tuple[bool, str]:
+    """Smoke: Promote stores prompt fragments and json_fields.prompt payload."""
+    try:
+        import kcp.nodes.keyframe_promote as mod
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.db.repo import connect, create_keyframe_set, add_keyframe_set_item
+
+        orig_pillow = mod.pillow_available
+        orig_load = mod.load_image_as_comfy
+        orig_save = mod.save_optional_image
+        orig_thumb = mod.make_thumbnail
+        try:
+            mod.pillow_available = lambda: True
+            mod.load_image_as_comfy = lambda *_args, **_kwargs: [[[[1.0, 0.0, 0.0]]]]
+            def _fake_save(_img, path, fmt=None):
+                _ = fmt
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"fake")
+                return True
+            mod.save_optional_image = _fake_save
+            mod.make_thumbnail = lambda *_a, **_k: False
+
+            with tempfile.TemporaryDirectory() as td:
+                db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+                conn = connect(Path(db_path))
+                try:
+                    conn.execute("INSERT INTO stacks (id,name,created_at,updated_at) VALUES (?,?,?,?)", ("stack1", "stack1", 1, 1))
+                    conn.commit()
+                    set_id = create_keyframe_set(conn, {"stack_id": "stack1", "variant_policy_id": "seed_sweep_12_v1", "variant_policy_json": {}, "base_seed": 1, "width": 64, "height": 64})
+                    add_keyframe_set_item(conn, {"set_id": set_id, "idx": 0, "seed": 1, "positive_prompt": "PROMPT+", "negative_prompt": "PROMPT-", "gen_params_json": {}})
+                    conn.execute("UPDATE keyframe_set_items SET image_path=? WHERE set_id=? AND idx=?", ("sets/demo/0.webp", set_id, 0))
+                    conn.commit()
+                    src = Path(td) / "kcp" / "sets" / "demo" / "0.webp"
+                    src.parent.mkdir(parents=True, exist_ok=True)
+                    src.write_bytes(b"fake")
+                finally:
+                    conn.close()
+
+                _aid, asset_json = mod.KCP_KeyframePromoteToAsset().run(db_path, set_id, 0, "dna_asset", "", "", "new", "")
+                payload = json.loads(asset_json)
+                jf = payload.get("json_fields", {})
+                prompt = jf.get("prompt", {}) if isinstance(jf, dict) else {}
+                if prompt.get("positive") != "PROMPT+" or prompt.get("negative") != "PROMPT-":
+                    return False, f"missing prompt dna in json_fields: {jf}"
+
+                conn = connect(Path(db_path))
+                try:
+                    row = conn.execute("SELECT positive_fragment, negative_fragment FROM assets WHERE id=?", (payload["asset_id"],)).fetchone()
+                    if not row or row[0] != "PROMPT+" or row[1] != "PROMPT-":
+                        return False, f"unexpected fragments row={row}"
+                finally:
+                    conn.close()
+
+        finally:
+            mod.pillow_available = orig_pillow
+            mod.load_image_as_comfy = orig_load
+            mod.save_optional_image = orig_save
+            mod.make_thumbnail = orig_thumb
+        return True, "promote prompt dna ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_asset_pick_input_choices_refresh() -> tuple[bool, str]:
+    """Smoke: AssetPick INPUT_TYPES choices include newly saved asset name."""
+    try:
+        import kcp.nodes.asset_nodes as mod
+        from kcp.nodes.project_init import KCP_ProjectInit
+
+        orig_pillow = mod.pillow_available
+        try:
+            mod.pillow_available = lambda: False
+            with tempfile.TemporaryDirectory() as td:
+                db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+                mod.KCP_AssetSave().run(db_path, "character", "choice_asset", "", "p", "", "", "", "new", None)
+                inp = mod.KCP_AssetPick.INPUT_TYPES(db_path=db_path, asset_type="character", include_archived=False, refresh_token=1, strict=False)
+                choices = inp["required"]["asset_name"][0]
+                if "choice_asset" not in choices:
+                    return False, f"asset_name choices missing saved asset: {choices}"
+        finally:
+            mod.pillow_available = orig_pillow
+        return True, "asset pick input choices refresh ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_keyframe_set_save_policy_fallback() -> tuple[bool, str]:
+    """Smoke: KeyframeSetSave derives variant_policy_id from variant_list_json when blank."""
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.nodes.keyframe_set_save import KCP_KeyframeSetSave
+        from kcp.db.repo import connect
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+            conn = connect(Path(db_path))
+            try:
+                conn.execute("INSERT INTO stacks (id,name,created_at,updated_at) VALUES (?,?,?,?)", ("stack1", "stack1", 1, 1))
+                conn.commit()
+            finally:
+                conn.close()
+
+            variants = json.dumps({"policy_id": "seed_sweep_12_v1", "variants": []})
+            set_id, _, _ = KCP_KeyframeSetSave().run(db_path, "stack1", "", "{}", variants, 0, 64, 64, "", -1, "")
+            conn = connect(Path(db_path))
+            try:
+                row = conn.execute("SELECT variant_policy_id FROM keyframe_sets WHERE id=?", (set_id,)).fetchone()
+                if not row or row[0] != "seed_sweep_12_v1":
+                    return False, f"unexpected variant_policy_id row={row}"
+            finally:
+                conn.close()
+        return True, "keyframe set save policy fallback ok"
     except Exception as e:
         return False, str(e)
 
@@ -995,6 +1207,8 @@ def main() -> int:
     if Path("kcp").exists() and not args.fast:
         for name, fn in [
             ("smoke_asset_thumb", smoke_asset_thumb),
+            ("smoke_asset_overwrite_preserves_media_without_image", smoke_asset_overwrite_preserves_media_without_image),
+            ("smoke_project_init_respects_create_if_missing", smoke_project_init_respects_create_if_missing),
             ("smoke_variant_pick", smoke_variant_pick),
             ("smoke_mark_picked", smoke_mark_picked),
             ("smoke_root_resolution", smoke_root_resolution),
@@ -1015,6 +1229,9 @@ def main() -> int:
             ("smoke_set_item_save_error_details", smoke_set_item_save_error_details),
             ("smoke_set_item_not_found_diagnostic", smoke_set_item_not_found_diagnostic),
             ("smoke_set_item_save_batch_index", smoke_set_item_save_batch_index),
+            ("smoke_promote_prompt_dna", smoke_promote_prompt_dna),
+            ("smoke_asset_pick_input_choices_refresh", smoke_asset_pick_input_choices_refresh),
+            ("smoke_keyframe_set_save_policy_fallback", smoke_keyframe_set_save_policy_fallback),
             ("smoke_promote_dependency_input", smoke_promote_dependency_input),
             ("smoke_set_image_load_promote_e2e", smoke_set_image_load_promote_e2e),
         ]:

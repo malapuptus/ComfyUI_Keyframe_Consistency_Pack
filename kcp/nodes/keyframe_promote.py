@@ -78,6 +78,10 @@ class KCP_KeyframePromoteToAsset:
                 "gen_params": gen_params,
                 "policy_id": set_row["variant_policy_id"] if set_row else "",
                 "stack_id": set_row["stack_id"] if set_row else "",
+                "prompt": {
+                    "positive": item["positive_prompt"],
+                    "negative": item["negative_prompt"],
+                },
             }
             tags = [t.strip() for t in tags_csv.split(",") if t.strip()]
 
