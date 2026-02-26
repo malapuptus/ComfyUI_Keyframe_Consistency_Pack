@@ -132,10 +132,6 @@ def _infer_format_from_suffix(path: Path) -> str:
     return "PNG"
 
 
-def save_comfy_image_atomic(image_obj: Any, path: Path, fmt: str | None = None) -> bool:
-    """Save a ComfyUI IMAGE atomically with explicit encoding format.
-
-    If fmt is omitted, it is inferred from path suffix (.webp -> WEBP, else PNG).
 def save_comfy_image_atomic(image_obj: Any, out_path: Path, fmt: str | None = None) -> bool:
     """
     Save an IMAGE-like object to out_path atomically.
@@ -147,19 +143,6 @@ def save_comfy_image_atomic(image_obj: Any, out_path: Path, fmt: str | None = No
     if image_obj is None:
         return False
     if not pillow_available():
-        return False
-
-    encode_fmt = (fmt or "").upper().strip() or _infer_format_from_suffix(path)
-    if encode_fmt not in {"PNG", "WEBP"}:
-        raise ValueError(f"unsupported image format: {encode_fmt}")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    img = comfy_image_to_pil(image_obj)
-    img.save(tmp, format=encode_fmt)
-    tmp.replace(path)
-    return True
-
         raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
 
     from pathlib import Path
@@ -225,10 +208,6 @@ def load_image_as_comfy(path: Path):
 
     with Image.open(path) as img:
         return pil_to_comfy_image(img)
-
-
-def save_optional_image(image_obj: Any, path: Path, fmt: str | None = None) -> bool:
-    return save_comfy_image_atomic(image_obj, path, fmt=fmt)
 
 
 def make_thumbnail(source: Path, target: Path, max_px: int = 384) -> bool:
