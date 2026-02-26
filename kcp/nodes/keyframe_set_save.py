@@ -49,13 +49,14 @@ class KCP_KeyframeSetSave:
             policy_payload = parse_json_object(variant_policy_json, default={})
             variants_payload = parse_json_object(variant_list_json, default={})
             variants = variants_payload.get("variants", [])
+            effective_policy_id = variant_policy_id if str(variant_policy_id).strip() else str(variants_payload.get("policy_id", "") or "")
 
             set_id = create_keyframe_set(
                 conn,
                 {
                     "name": set_name,
                     "stack_id": stack_id,
-                    "variant_policy_id": variant_policy_id,
+                    "variant_policy_id": effective_policy_id,
                     "variant_policy_json": policy_payload,
                     "base_seed": base_seed,
                     "width": width,
