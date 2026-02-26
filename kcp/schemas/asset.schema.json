@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kcp.asset.schema.json",
+  "type": "object",
+  "required": ["asset_type", "format_version", "invariants", "variables", "prompt"],
+  "properties": {
+    "format_version": {"type": "string", "enum": ["1.0"]},
+    "asset_type": {"type": "string", "enum": ["character", "environment", "action", "camera", "lighting", "style", "keyframe", "pose", "mask", "control_guide"]},
+    "display": {"type": "object", "properties": {"name": {"type": "string"}, "description": {"type": "string"}}, "additionalProperties": false},
+    "invariants": {"type": "object", "additionalProperties": true},
+    "variables": {"type": "object", "additionalProperties": true},
+    "prompt": {
+      "type": "object",
+      "required": ["positive_fragment", "negative_fragment", "tokens"],
+      "properties": {
+        "positive_fragment": {"type": "string"},
+        "negative_fragment": {"type": "string"},
+        "tokens": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}}
+      },
+      "additionalProperties": false
+    },
+    "references": {
+      "type": "object",
+      "properties": {
+        "image_paths": {"type": "array", "items": {"type": "string"}},
+        "pose_id": {"type": "string"},
+        "mask_id": {"type": "string"},
+        "control_guide_id": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
