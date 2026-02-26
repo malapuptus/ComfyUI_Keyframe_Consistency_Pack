@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import json
 from kcp.db.paths import normalize_db_path, with_projectinit_db_path_tip
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
+from pathlib import Path
+
+>>>>>>> main
 from kcp.db.repo import connect
 
 
@@ -26,6 +31,10 @@ class KCP_ProjectStatus:
             conn = connect(normalize_db_path(db_path))
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
+        conn = connect(Path(db_path))
+>>>>>>> main
         try:
             env_rows = conn.execute("SELECT name, image_path FROM assets WHERE type='environment' AND is_archived=0").fetchall()
             warnings = []

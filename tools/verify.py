@@ -1269,12 +1269,25 @@ def smoke_set_item_save_batch_node() -> tuple[bool, str]:
         orig_thumb = mod.make_thumbnail
         try:
             mod.pillow_available = lambda: True
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
             saved = []
 
             def _fake_save(image_obj, path, fmt=None):
                 _ = fmt
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"fake")
+=======
+            saved_first_vals = []
+
+            def _first_scalar(x):
+                cur = x
+                while isinstance(cur, (list, tuple)) and cur:
+                    cur = cur[0]
+                return float(cur)
+
+            def _fake_save(image_obj, path, fmt=None):
+                _ = path, fmt
+>>>>>>> main
                 data = image_obj
                 if hasattr(data, "detach"):
                     data = data.detach()
@@ -1283,6 +1296,7 @@ def smoke_set_item_save_batch_node() -> tuple[bool, str]:
                 if hasattr(data, "numpy"):
                     data = data.numpy()
                 try:
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
                     v = float(data[0, 0, 0, 0])
                 except Exception:
                     v = 0.0
@@ -1297,6 +1311,15 @@ def smoke_set_item_save_batch_node() -> tuple[bool, str]:
 
             mod.save_comfy_image_atomic = _fake_save
             mod.make_thumbnail = _fake_thumb
+=======
+                    saved_first_vals.append(float(data[0, 0, 0, 0]))
+                except Exception:
+                    saved_first_vals.append(_first_scalar(data))
+                return True
+
+            mod.save_comfy_image_atomic = _fake_save
+            mod.make_thumbnail = lambda *_args, **_kwargs: False
+>>>>>>> main
 
             with tempfile.TemporaryDirectory() as td:
                 db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
@@ -1305,13 +1328,18 @@ def smoke_set_item_save_batch_node() -> tuple[bool, str]:
                     conn.execute("INSERT INTO stacks (id,name,created_at,updated_at) VALUES (?,?,?,?)", ("stack1", "stack1", 1, 1))
                     conn.commit()
                     set_id = create_keyframe_set(conn, {"stack_id": "stack1", "variant_policy_id": "seed_sweep_12_v1", "variant_policy_json": {}, "base_seed": 1, "width": 64, "height": 64})
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
                     for i in range(3):
                         add_keyframe_set_item(conn, {"set_id": set_id, "idx": i, "seed": i + 1, "positive_prompt": "p", "negative_prompt": "n", "gen_params_json": {}})
+=======
+                    add_keyframe_set_item(conn, {"set_id": set_id, "idx": 0, "seed": 1, "positive_prompt": "p", "negative_prompt": "n", "gen_params_json": {}})
+>>>>>>> main
                 finally:
                     conn.close()
 
                 try:
                     import numpy as np  # type: ignore
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
                     batch = np.zeros((3, 2, 2, 3), dtype=np.float32)
                     batch[0] += 0.1
                     batch[1] += 0.5
@@ -1438,6 +1466,18 @@ def smoke_set_item_save_batch_index() -> tuple[bool, str]:
                 except Exception:
                     # fallback path when numpy is unavailable in environment
                     mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, [[[[0.1, 0.1, 0.1]]]], "webp", True, 0)
+=======
+
+                    batch = np.zeros((2, 2, 2, 3), dtype=np.float32)
+                    batch[0, :, :, :] = 0.1
+                    batch[1, :, :, :] = 0.8
+                    mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, batch, "webp", True, 1)
+                    if not saved_first_vals or abs(saved_first_vals[-1] - 0.8) > 1e-6:
+                        return False, f"batch index selection mismatch values={saved_first_vals}"
+                except Exception:
+                    # fallback path when numpy is unavailable in environment
+                    mod.KCP_KeyframeSetItemSaveImage().run(db_path, set_id, 0, [[[[0.1, 0.1, 0.1]]]], "webp", True, 0)
+>>>>>>> main
 
         finally:
             mod.pillow_available = orig_pillow
@@ -1448,6 +1488,7 @@ def smoke_set_item_save_batch_index() -> tuple[bool, str]:
         return False, str(e)
 
 
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 def smoke_promote_prompt_dna() -> tuple[bool, str]:
     """Smoke: Promote stores prompt fragments and json_fields.prompt payload."""
     try:
@@ -1922,6 +1963,8 @@ def smoke_refresh_token_convention_across_picks() -> tuple[bool, str]:
         return False, str(e)
 
 
+=======
+>>>>>>> main
 def smoke_promote_dependency_input() -> tuple[bool, str]:
     """Smoke: promote node exposes depends_on_item_json dependency input."""
     try:
@@ -2014,6 +2057,7 @@ def smoke_set_image_load_promote_e2e() -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 def smoke_readme_mentions_winner_loop_wiring() -> tuple[bool, str]:
     """Smoke: README contains winner-loop and on-ramp wiring lines."""
     try:
@@ -2040,6 +2084,8 @@ def smoke_readme_mentions_winner_loop_wiring() -> tuple[bool, str]:
         return True, "readme winner loop wiring ok"
     except Exception as e:
         return False, str(e)
+=======
+>>>>>>> main
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fast", action="store_true")
@@ -2064,6 +2110,7 @@ def main() -> int:
     if Path("kcp").exists() and not args.fast:
         for name, fn in [
             ("smoke_asset_thumb", smoke_asset_thumb),
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
             ("smoke_pack_root_entrypoint_import", smoke_pack_root_entrypoint_import),
             ("smoke_asset_overwrite_preserves_media_without_image", smoke_asset_overwrite_preserves_media_without_image),
             ("smoke_project_init_respects_create_if_missing", smoke_project_init_respects_create_if_missing),
@@ -2076,12 +2123,19 @@ def main() -> int:
             ("smoke_keyframe_set_save_stack_json_fallback_and_provenance", smoke_keyframe_set_save_stack_json_fallback_and_provenance),
             ("smoke_mark_picked", smoke_mark_picked),
             ("smoke_mark_picked_derives_from_item_json", smoke_mark_picked_derives_from_item_json),
+=======
+            ("smoke_variant_pick", smoke_variant_pick),
+            ("smoke_mark_picked", smoke_mark_picked),
+>>>>>>> main
             ("smoke_root_resolution", smoke_root_resolution),
             ("smoke_output_nodes", smoke_output_nodes),
             ("smoke_picker_empty_ok", smoke_picker_empty_ok),
             ("smoke_picker_not_found_codes", smoke_picker_not_found_codes),
             ("smoke_default_db_path_hint", smoke_default_db_path_hint),
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
             ("smoke_asset_pick_returns_media_tensors", smoke_asset_pick_returns_media_tensors),
+=======
+>>>>>>> main
             ("smoke_asset_pick_missing_media_strictness", smoke_asset_pick_missing_media_strictness),
             ("smoke_stack_pick_missing_refs_strictness", smoke_stack_pick_missing_refs_strictness),
             ("smoke_set_item_media_update", smoke_set_item_media_update),
@@ -2094,6 +2148,7 @@ def main() -> int:
             ("smoke_connect_migrates", smoke_connect_migrates),
             ("smoke_set_item_save_error_details", smoke_set_item_save_error_details),
             ("smoke_set_item_not_found_diagnostic", smoke_set_item_not_found_diagnostic),
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
             ("smoke_set_item_save_batch_node", smoke_set_item_save_batch_node),
             ("smoke_set_item_save_batch_index", smoke_set_item_save_batch_index),
             ("smoke_set_load_batch_node", smoke_set_load_batch_node),
@@ -2110,6 +2165,11 @@ def main() -> int:
             ("smoke_promote_derives_from_item_json", smoke_promote_derives_from_item_json),
             ("smoke_set_image_load_promote_e2e", smoke_set_image_load_promote_e2e),
             ("smoke_readme_mentions_winner_loop_wiring", smoke_readme_mentions_winner_loop_wiring),
+=======
+            ("smoke_set_item_save_batch_index", smoke_set_item_save_batch_index),
+            ("smoke_promote_dependency_input", smoke_promote_dependency_input),
+            ("smoke_set_image_load_promote_e2e", smoke_set_image_load_promote_e2e),
+>>>>>>> main
         ]:
             ok, msg = fn()
             oracles.append(name)

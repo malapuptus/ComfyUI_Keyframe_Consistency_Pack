@@ -16,6 +16,10 @@ class KCP_VariantPack:
                 "variant_policy_id": (available_policy_ids(),),
                 "count": ("INT", {"default": 12, "min": 1, "max": 256}),
                 "base_seed": ("INT", {"default": 0, "min": 0, "max": 2147483647}),
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
+                "base_seed": ("INT", {"default": 0}),
+>>>>>>> main
                 "width": ("INT", {"default": 1024, "min": 64}),
                 "height": ("INT", {"default": 1024, "min": 64}),
                 "steps": ("INT", {"default": 26, "min": 1}),

@@ -313,6 +313,7 @@ Acceptance criteria:
 - verify completes with receipt KCP-032.
 Evidence needed (what to paste/verify):
 - tools/verify.py --receipt "KCP-032"
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 
 # Ticket KCP-043 — Visible batch_index on KCP_KeyframeSetItemSaveImage
 
@@ -1777,3 +1778,5 @@ Notes / implementation hints:
 
 Risks:
 - Low.
+=======
+>>>>>>> main

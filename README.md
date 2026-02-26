@@ -7,10 +7,21 @@ Text-only assets work without Pillow.
 
 Pillow is required for any node path that writes images/thumbnails (for example `KCP_AssetSave` when `image` input is connected).
 
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
+
+>>>>>>> main
 Install dependencies in your ComfyUI Python environment:
 
 ```bash
 python -m pip install -r requirements.txt
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
+Install Pillow in your ComfyUI Python environment:
+
+```bash
+python -m pip install Pillow
+>>>>>>> main
 ```
 
 Behavior when Pillow is missing:
@@ -23,6 +34,12 @@ Behavior when Pillow is missing:
 - Default max size: `384px`
 - If thumbnail generation fails, KCP saves the original PNG and appends a warning in `asset_json.warnings`.
 
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
+- If thumbnail generation fails, KCP saves the original PNG and appends a warning in `asset_json.warnings`.
+- If thumbnail generation fails, KCP still saves the original PNG and appends a warning in `asset_json.warnings`.
+
+>>>>>>> main
 ## json_fields validation (asset schema)
 `KCP_AssetSave` validates non-empty `json_fields` strictly against `kcp/schemas/asset.schema.json`.
 
@@ -97,7 +114,10 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 
 
 ## Winner promotion addendum (v1)
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 - Opinionated on-ramp for batched renders: wire `KSampler` decoded `IMAGE` output -> `KCP_KeyframeSetItemSaveBatch.images` to persist the full batch in one call.
+=======
+>>>>>>> main
 - Use `KCP_KeyframeSetItemSaveImage` to attach a rendered IMAGE to `(set_id, idx)` and persist media under `sets/<set_id>/<idx>.*`.
 - Use `KCP_KeyframeSetItemLoad` to preview/debug saved set items (image + prompts + gen params).
 - Use `KCP_KeyframePromoteToAsset` to promote a winning set item into a reusable `keyframe` asset with provenance in `json_fields`.
@@ -105,8 +125,11 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 
 
 ## Keyframe set media persistence (v1)
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 - `idx` selects which keyframe set item row to update in DB (`keyframe_set_items.idx`).
 - `batch_index` selects which image from the incoming IMAGE batch gets saved for that row (`0` = first image).
+=======
+>>>>>>> main
 - `KCP_KeyframeSetItemSaveImage` stores rendered item media under:
   - `sets/<set_id>/<idx>.webp` (default format)
   - `sets/<set_id>/<idx>_thumb.webp` (thumb)
@@ -116,6 +139,7 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - `KCP_KeyframePromoteToAsset` promotes a chosen set item to `assets(type=keyframe)` with provenance in `json_fields`.
 
 
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 
 ## Opinionated On-Ramp: Render & Persist a Variant Pack
 - `KCP_ProjectInit` first; wire `db_path` into every DB-backed KCP node.
@@ -131,6 +155,8 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - Terminology: `idx` is the DB item index in `keyframe_set_items`; `batch_index` selects one image inside an incoming IMAGE batch tensor.
 - Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_variant_pack.json`.
 
+=======
+>>>>>>> main
 ## Troubleshooting db_path
 - Expected `db_path` pattern is `.../output/kcp/db/kcp.sqlite` (or another real sqlite file path).
 - If you point `db_path` at a directory (for example `.../output/kcp`), nodes raise: `kcp_db_path_is_directory: expected .../db/kcp.sqlite`.
@@ -147,6 +173,7 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 - `kcp_io_write_failed`: image/thumb write failed; current diagnostics include `root=`, `image_path=`, and `err=`.
 
 SaveImage format note: invalid `format` values are coerced to `webp`.
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 
 
 ## Pick Winner (v1): preview → choose → mark → promote
@@ -182,3 +209,5 @@ SaveImage format note: invalid `format` values are coerced to `webp`.
 - `KeyframeSetSave.set_id -> KCP_KeyframeSetItemSaveBatch.set_id`
 - `KCP_KeyframeSetPick -> KCP_KeyframeSetLoadBatch -> KCP_KeyframeSetItemPick -> KCP_KeyframeSetMarkPicked -> KCP_KeyframePromoteToAsset`
 - Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_pick_winner.json`.
+=======
+>>>>>>> main

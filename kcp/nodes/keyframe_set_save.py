@@ -1,8 +1,16 @@
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
 
+=======
+>>>>>>> main
 from __future__ import annotations
 
 import json
 from kcp.db.paths import normalize_db_path, with_projectinit_db_path_tip
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
+=======
+from pathlib import Path
+
+>>>>>>> main
 from kcp.db.repo import add_keyframe_set_item, connect, create_keyframe_set
 from kcp.util.json_utils import parse_json_object
 
@@ -16,7 +24,10 @@ class KCP_KeyframeSetSave:
             "required": {
                 "db_path": ("STRING", {"default": "output/kcp/db/kcp.sqlite"}),
                 "stack_id": ("STRING", {"default": ""}),
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
                 "stack_json": ("STRING", {"default": "{}", "multiline": True}),
+=======
+>>>>>>> main
                 "variant_policy_id": ("STRING", {"default": ""}),
                 "variant_policy_json": ("STRING", {"default": "{}", "multiline": True}),
                 "variant_list_json": ("STRING", {"default": "{}", "multiline": True}),
@@ -25,9 +36,18 @@ class KCP_KeyframeSetSave:
                 "height": ("INT", {"default": 1024, "min": 64}),
                 "set_name": ("STRING", {"default": ""}),
                 "picked_index": ("INT", {"default": -1, "min": -1, "max": 255}),
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
                 "notes": ("STRING", {"default": ""}),
                 "model_ref": ("STRING", {"default": ""}),
                 "breakdown_json": ("STRING", {"default": "{}", "multiline": True}),
+=======
+                "base_seed": ("INT", {"default": 0}),
+                "width": ("INT", {"default": 1024}),
+                "height": ("INT", {"default": 1024}),
+                "set_name": ("STRING", {"default": ""}),
+                "picked_index": ("INT", {"default": -1}),
+                "notes": ("STRING", {"default": ""}),
+>>>>>>> main
             }
         }
 
@@ -36,11 +56,16 @@ class KCP_KeyframeSetSave:
     FUNCTION = "run"
     CATEGORY = "KCP"
 
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
     def run(self, db_path, stack_id, stack_json, variant_policy_id, variant_policy_json, variant_list_json, base_seed, width, height, set_name="", picked_index=-1, notes="", model_ref="", breakdown_json="{}"):
+=======
+    def run(self, db_path, stack_id, variant_policy_id, variant_policy_json, variant_list_json, base_seed, width, height, set_name="", picked_index=-1, notes=""):
+>>>>>>> main
         try:
             conn = connect(normalize_db_path(db_path))
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
         try:
             policy_payload = parse_json_object(variant_policy_json, default={})
             variants_payload = parse_json_object(variant_list_json, default={})
@@ -97,10 +122,20 @@ class KCP_KeyframeSetSave:
                 "compose_breakdown": breakdown_payload,
             }
 
+=======
+        conn = connect(Path(db_path))
+        try:
+            policy_payload = parse_json_object(variant_policy_json, default={})
+            variants_payload = parse_json_object(variant_list_json, default={})
+            variants = variants_payload.get("variants", [])
+            effective_policy_id = variant_policy_id if str(variant_policy_id).strip() else str(variants_payload.get("policy_id", "") or "")
+
+>>>>>>> main
             set_id = create_keyframe_set(
                 conn,
                 {
                     "name": set_name,
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
                     "stack_id": effective_stack_id,
                     "variant_policy_id": effective_policy_id,
                     "variant_policy_json": policy_payload,
@@ -110,6 +145,16 @@ class KCP_KeyframeSetSave:
                     "picked_index": picked_index if picked_index >= 0 else None,
                     "notes": notes,
                     "model_ref": model_ref,
+=======
+                    "stack_id": stack_id,
+                    "variant_policy_id": effective_policy_id,
+                    "variant_policy_json": policy_payload,
+                    "base_seed": base_seed,
+                    "width": width,
+                    "height": height,
+                    "picked_index": picked_index if picked_index >= 0 else None,
+                    "notes": notes,
+>>>>>>> main
                 },
             )
             for i, v in enumerate(variants):
@@ -119,7 +164,11 @@ class KCP_KeyframeSetSave:
                     {
                         "set_id": set_id,
                         "idx": int(v.get("index", i)),
+<<<<<<< codex/bootstrap-kcp-project-structure-gy3tp6
                         "seed": int(gp.get("seed", effective_base_seed + i)),
+=======
+                        "seed": int(gp.get("seed", base_seed + i)),
+>>>>>>> main
                         "positive_prompt": v.get("positive", ""),
                         "negative_prompt": v.get("negative", ""),
                         "gen_params_json": gp,
