@@ -59,9 +59,9 @@ class KCP_KeyframePromoteToAsset:
             if resolved_idx < 0 and "idx" in item:
                 resolved_idx = int(item.get("idx"))
         if not resolved_set_id:
-            raise RuntimeError("kcp_keyframe_set_not_found")
+            raise RuntimeError("kcp_set_item_ref_missing")
         if resolved_idx < 0:
-            raise RuntimeError("kcp_set_item_not_found")
+            raise RuntimeError("kcp_set_item_ref_missing")
         if not pillow_available():
             raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
 

@@ -149,6 +149,13 @@ This is the supported v1 flow (manual wiring to standard ComfyUI render nodes).
 SaveImage format note: invalid `format` values are coerced to `webp`.
 
 
+## Pick Winner (v1): preview → choose → mark → promote
+- `KCP_KeyframeSetPick.set_id` -> `KCP_KeyframeSetLoadBatch.set_id`
+- `KCP_KeyframeSetItemPick.item_json` -> `KCP_KeyframeSetMarkPicked.item_json`
+- `KCP_KeyframeSetItemPick.item_json` -> `KCP_KeyframePromoteToAsset.item_json`
+- This item_json wiring avoids manual typing of set_id/idx for mark/promote.
+- Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_variant_pack.json`.
+
 ## Pick Winner (v1): preview grid → choose idx → mark picked → promote
 - Use `KCP_KeyframeSetPick` to choose a recent set and output `set_id`.
 - Feed `set_id` into `KCP_KeyframeSetLoadBatch` and send `images` (or `thumbs`) to `PreviewImage` to review the saved grid.

@@ -2,21 +2,18 @@
   "name": "KCP Opinionated On-Ramp + Pick Winner Loop",
   "notes": [
     "Render path: KCP_ProjectInit.db_path -> all KCP db_path inputs.",
-    "Render path: KCP_VariantPack.variant_list_json -> KCP_VariantUnroll.variant_list_json.",
-    "Render path: KCP_VariantUnroll list outputs drive CLIP/KSampler list mapping; decoded IMAGE -> KCP_KeyframeSetItemSaveImage.image and idx_list -> idx.",
+    "Render path: KCP_VariantPack -> KCP_KeyframeSetSave then KSampler IMAGE batch -> KCP_KeyframeSetItemSaveBatch.images.",
     "Winner path: KCP_KeyframeSetPick.set_id -> KCP_KeyframeSetLoadBatch.set_id and KCP_KeyframeSetItemPick.set_id.",
-    "Winner path: KCP_KeyframeSetItemPick.item_json -> KCP_KeyframeSetMarkPicked.item_json (picked_index=-1) and KCP_KeyframePromoteToAsset.item_json (set_id blank, idx=-1).",
-    "Optional status: KCP_KeyframeSetSummary shows N items, saved media count, and picked index."
+    "Winner path: KCP_KeyframeSetItemPick.item_json -> KCP_KeyframeSetMarkPicked.item_json and -> KCP_KeyframePromoteToAsset.item_json."
   ],
   "wiring": {
     "render_onramp": [
       "KCP_ProjectInit",
       "KCP_VariantPack",
-      "KCP_VariantUnroll",
       "KCP_KeyframeSetSave",
       "KSampler",
       "VAE Decode",
-      "KCP_KeyframeSetItemSaveImage"
+      "KCP_KeyframeSetItemSaveBatch"
     ],
     "pick_winner": [
       "KCP_KeyframeSetPick",
@@ -24,8 +21,7 @@
       "PreviewImage",
       "KCP_KeyframeSetItemPick",
       "KCP_KeyframeSetMarkPicked",
-      "KCP_KeyframePromoteToAsset",
-      "KCP_KeyframeSetSummary"
+      "KCP_KeyframePromoteToAsset"
     ]
   }
 }

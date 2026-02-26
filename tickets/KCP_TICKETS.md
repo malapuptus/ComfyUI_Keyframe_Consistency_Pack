@@ -1387,3 +1387,203 @@ Notes / implementation hints:
 
 Risks:
 - Medium.
+
+# Ticket KCP-079 — Add KeyframeSetPick (dropdown set chooser)
+
+Status: DONE
+
+Goal (1 sentence): Let users pick a keyframe set via DB-backed dropdown and return `set_id` + `set_json` without typing IDs.
+
+Scope:
+
+Must include:
+- Implement/refresh `KCP_KeyframeSetPick` in `kcp/nodes/keyframe_set_pick.py`.
+- Required inputs: `db_path`, `set_choice`, `refresh_token`, `strict`.
+- Dropdown labels include `set_id + created_at + optional name`, ordered newest first.
+- Outputs: `set_id`, `set_json`, `warning_json`.
+- strict=False empty selection returns warning payload; strict=True missing/not-found raises `kcp_set_not_found`.
+- Node registered in `kcp/__init__.py`.
+- Verify smoke `smoke_set_pick_input_choices`.
+
+Must NOT include:
+- No DB schema changes.
+
+Acceptance criteria:
+- Dropdown populates after creating sets in temp DB.
+- Node returns matching set_id and set_json containing id.
+- `python tools/verify.py --receipt "KCP-079"` passes.
+
+Evidence needed (what to paste/verify):
+- `python tools/verify.py --receipt "KCP-079"`
+
+Notes / implementation hints:
+- Robust parsing: split choice on first `|` to recover set_id.
+
+Risks:
+- Low.
+
+# Ticket KCP-080 — Add KeyframeSetLoadBatch (load preview grid)
+
+Status: DONE
+
+Goal (1 sentence): Load a set’s media in stable idx order so winner-preview workflows are deterministic.
+
+Scope:
+
+Must include:
+- Implement/refresh `KCP_KeyframeSetLoadBatch` in `kcp/nodes/keyframe_set_load_batch.py`.
+- Required inputs: `db_path`, `set_id`, `strict`.
+- Optional input: `only_with_media` default `True`.
+- Outputs: `images`, `thumbs`, `items_json` with `OUTPUT_IS_LIST` enabled for all outputs.
+- Sorted idx ASC output alignment.
+- strict=False missing media returns `None` entries + warning JSON per item (`kcp_set_media_missing`).
+- strict=True missing raises `kcp_set_media_missing` with first missing idx/path context.
+- Verify smoke `smoke_set_load_batch_sorted_idx_order`.
+
+Must NOT include:
+- No schema changes.
+
+Acceptance criteria:
+- Output lists are sorted and aligned by idx.
+- saved-only mode length matches rows with media.
+- `python tools/verify.py --receipt "KCP-080"` passes.
+
+Evidence needed (what to paste/verify):
+- `python tools/verify.py --receipt "KCP-080"`
+
+Notes / implementation hints:
+- Reuse existing image load helper and root resolution.
+
+Risks:
+- Medium-low.
+
+# Ticket KCP-081 — Add KeyframeSetItemPick (winner selection without typing idx)
+
+Status: DONE
+
+Goal (1 sentence): Provide deterministic set-item dropdown labels and return idx/item_json for downstream mark/promote nodes.
+
+Scope:
+
+Must include:
+- Implement/refresh `KCP_KeyframeSetItemPick` in `kcp/nodes/keyframe_set_item_pick.py`.
+- Required inputs: `db_path`, `set_id`, `item_choice`, `refresh_token`, `strict`.
+- Optional input: `only_with_media` default `True`.
+- Label format deterministic: `idx=<n> [saved|missing] seed=<seed>`.
+- strict=False empty returns warning payload; strict=True missing/not-found raises `kcp_set_item_not_found`.
+- Robust idx parsing tolerant to spacing (`idx = 3` etc).
+- Verify smoke `smoke_set_item_pick_input_choices`.
+
+Must NOT include:
+- No schema changes.
+
+Acceptance criteria:
+- Dropdown populates and filters by media flag.
+- Label parsing returns correct idx.
+- `python tools/verify.py --receipt "KCP-081"` passes.
+
+Evidence needed (what to paste/verify):
+- `python tools/verify.py --receipt "KCP-081"`
+
+Notes / implementation hints:
+- Regex parse path used for tolerance.
+
+Risks:
+- Low.
+
+# Ticket KCP-082 — MarkPicked accepts item_json (no manual set_id/idx)
+
+Status: DONE
+
+Goal (1 sentence): Allow mark-picked via item_json derivation while preserving explicit picked_index/set_id precedence.
+
+Scope:
+
+Must include:
+- Keep existing mark-picked inputs and add optional `item_json`.
+- `picked_index=-1` sentinel derives idx/set_id from item_json if present.
+- Explicit `picked_index>=0` path unchanged.
+- If set_id still blank after derivation, raise `kcp_set_id_missing`.
+- Verify smoke `smoke_mark_picked_derives_from_item_json`.
+
+Must NOT include:
+- No schema changes.
+
+Acceptance criteria:
+- Sentinel + valid item_json updates picked index correctly.
+- Explicit picked_index behavior unchanged.
+- `python tools/verify.py --receipt "KCP-082"` passes.
+
+Evidence needed (what to paste/verify):
+- `python tools/verify.py --receipt "KCP-082"`
+
+Notes / implementation hints:
+- item_json may include extra fields; only set_id/idx are required.
+
+Risks:
+- Low.
+
+# Ticket KCP-083 — Promote accepts item_json (no manual set_id/idx)
+
+Status: DONE
+
+Goal (1 sentence): Allow promote path to derive set/item reference from item_json without breaking explicit input workflows.
+
+Scope:
+
+Must include:
+- Add optional `item_json` on `KCP_KeyframePromoteToAsset`.
+- `idx=-1` sentinel allows derivation from item_json; explicit values preserved.
+- If unresolved reference remains, raise `kcp_set_item_ref_missing`.
+- Preserve prompt DNA persistence behavior.
+- Verify smoke `smoke_promote_derives_from_item_json`.
+
+Must NOT include:
+- No schema changes.
+
+Acceptance criteria:
+- Promote works with db_path + item_json + name when refs omitted/sentinel.
+- Existing explicit set_id/idx workflow continues working.
+- `python tools/verify.py --receipt "KCP-083"` passes.
+
+Evidence needed (what to paste/verify):
+- `python tools/verify.py --receipt "KCP-083"`
+
+Notes / implementation hints:
+- Derivation fills blanks only; no explicit override.
+
+Risks:
+- Low.
+
+# Ticket KCP-084 — README winner loop + example workflow JSON
+
+Status: DONE
+
+Goal (1 sentence): Document and exemplify the opinionated Winner Loop wiring using pick/load/item_json flows.
+
+Scope:
+
+Must include:
+- README section with exact wiring lines:
+  - `KCP_KeyframeSetPick.set_id -> KCP_KeyframeSetLoadBatch.set_id`
+  - `KCP_KeyframeSetItemPick.item_json -> KCP_KeyframeSetMarkPicked.item_json`
+  - `KCP_KeyframeSetItemPick.item_json -> KCP_KeyframePromoteToAsset.item_json`
+- Example workflow JSON under `examples/workflows/` showing VariantPack->SetSave, Render(batch)->SaveBatch, and SetPick/LoadBatch/ItemPick->Mark/Pomote.
+- Verify smoke `smoke_readme_mentions_winner_loop_wiring`.
+
+Must NOT include:
+- No schema changes.
+
+Acceptance criteria:
+- README contains the exact winner-loop strings.
+- Example workflow exists and is referenced.
+- `python tools/verify.py --receipt "KCP-084"` passes.
+
+Evidence needed (what to paste/verify):
+- `python tools/verify.py --receipt "KCP-084"`
+
+Notes / implementation hints:
+- Keep workflow JSON minimal as a wiring reference.
+
+Risks:
+- Low.

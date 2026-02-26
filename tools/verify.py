@@ -480,8 +480,8 @@ def smoke_set_item_pick_defaults_saved_only() -> tuple[bool, str]:
                 conn.close()
 
             default_inputs = KCP_KeyframeSetItemPick.INPUT_TYPES(db_path=db_path, set_id=set_id)
-            if default_inputs["required"]["only_with_media"][1].get("default") is not True:
-                return False, f"only_with_media default changed: {default_inputs['required']['only_with_media']}"
+            if default_inputs["optional"]["only_with_media"][1].get("default") is not True:
+                return False, f"only_with_media default changed: {default_inputs['optional']['only_with_media']}"
             default_choices = default_inputs["required"]["item_choice"][0]
             if default_choices != ["idx=0 [saved] seed=111"]:
                 return False, f"unexpected default choices: {default_choices}"
@@ -1584,7 +1584,7 @@ def smoke_keyframe_set_save_policy_fallback() -> tuple[bool, str]:
 
 
 def smoke_set_load_batch_sorted_idx_order() -> tuple[bool, str]:
-    """Smoke: KeyframeSetLoadBatch output items are aligned to ascending idx order."""
+    """Smoke: KeyframeSetLoadBatch outputs align to ascending idx list order."""
     try:
         import kcp.nodes.keyframe_set_load_batch as mod
         from kcp.nodes.project_init import KCP_ProjectInit
@@ -1595,7 +1595,6 @@ def smoke_set_load_batch_sorted_idx_order() -> tuple[bool, str]:
         try:
             mod.pillow_available = lambda: True
             mod.load_image_as_comfy = lambda _p: [[[[1.0, 0.0, 0.0]]]]
-
             with tempfile.TemporaryDirectory() as td:
                 db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
                 root = Path(db_path).parent.parent
@@ -1613,21 +1612,21 @@ def smoke_set_load_batch_sorted_idx_order() -> tuple[bool, str]:
                 finally:
                     conn.close()
 
-                _images, _thumbs, items_json, labels_json = mod.KCP_KeyframeSetLoadBatch().run(db_path, set_id, False, True)
-                items = json.loads(items_json).get("items", [])
-                labels = json.loads(labels_json)
-                if [int(x.get("idx", -1)) for x in items] != [0, 1, 2]:
-                    return False, f"items not sorted by idx: {items}"
-                if [int(x.get("idx", -1)) for x in labels] != [0, 1, 2]:
-                    return False, f"labels not sorted by idx: {labels}"
+                images, thumbs, items_json = mod.KCP_KeyframeSetLoadBatch().run(db_path, set_id, False, True)
+                if len(images) != 3 or len(thumbs) != 3 or len(items_json) != 3:
+                    return False, f"length mismatch images={len(images)} thumbs={len(thumbs)} items_json={len(items_json)}"
+                parsed = [json.loads(x) for x in items_json]
+                if [int(p.get("idx", -1)) for p in parsed] != [0, 1, 2]:
+                    return False, f"items_json idx order mismatch: {parsed}"
         finally:
             mod.pillow_available = orig_pillow
             mod.load_image_as_comfy = orig_load
         return True, "set load batch sorted idx order ok"
     except Exception as e:
         return False, str(e)
+
 def smoke_set_load_batch_node() -> tuple[bool, str]:
-    """Smoke: KeyframeSetLoadBatch returns IMAGE batches for saved set items."""
+    """Smoke: KeyframeSetLoadBatch returns list outputs for saved set items."""
     try:
         import kcp.nodes.keyframe_set_load_batch as mod
         from kcp.nodes.project_init import KCP_ProjectInit
@@ -1638,7 +1637,6 @@ def smoke_set_load_batch_node() -> tuple[bool, str]:
         try:
             mod.pillow_available = lambda: True
             mod.load_image_as_comfy = lambda _p: [[[[1.0, 0.0, 0.0]]]]
-
             with tempfile.TemporaryDirectory() as td:
                 db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
                 root = Path(db_path).parent.parent
@@ -1658,15 +1656,11 @@ def smoke_set_load_batch_node() -> tuple[bool, str]:
                 finally:
                     conn.close()
 
-                images, thumbs, items_json, labels_json = mod.KCP_KeyframeSetLoadBatch().run(db_path, set_id, False, True)
-                if images is None or thumbs is None:
-                    return False, "expected non-empty images/thumbs"
-                payload = json.loads(items_json)
-                labels = json.loads(labels_json)
-                if payload.get("count") != 2:
-                    return False, f"unexpected payload count: {payload}"
-                if [int(x.get("idx", -1)) for x in labels] != [0, 1]:
-                    return False, f"unexpected labels ordering: {labels}"
+                images, thumbs, items_json = mod.KCP_KeyframeSetLoadBatch().run(db_path, set_id, False, True)
+                if len(images) != 2 or len(thumbs) != 2 or len(items_json) != 2:
+                    return False, f"expected list outputs len=2 got images={len(images)} thumbs={len(thumbs)} items={len(items_json)}"
+                if [json.loads(x).get("idx") for x in items_json] != [0, 1]:
+                    return False, f"unexpected idx order in items_json: {items_json}"
         finally:
             mod.pillow_available = orig_pillow
             mod.load_image_as_comfy = orig_load
@@ -1674,10 +1668,7 @@ def smoke_set_load_batch_node() -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-
-
-
-def smoke_mark_picked_from_item_json() -> tuple[bool, str]:
+def smoke_mark_picked_derives_from_item_json() -> tuple[bool, str]:
     """Smoke: mark picked can derive idx/set_id from item_json when picked_index=-1."""
     try:
         from kcp.nodes.project_init import KCP_ProjectInit
@@ -1702,12 +1693,18 @@ def smoke_mark_picked_from_item_json() -> tuple[bool, str]:
                 return False, f"picked_index mismatch payload={payload}"
             if str(payload.get("id")) != set_id:
                 return False, f"set_id mismatch payload={payload}"
+
+            try:
+                KCP_KeyframeSetMarkPicked().run(db_path, "", -1, "", "")
+                return False, "expected kcp_set_id_missing"
+            except RuntimeError as e:
+                if "kcp_set_id_missing" not in str(e):
+                    return False, f"unexpected missing-set error: {e}"
         return True, "mark picked derives item_json ok"
     except Exception as e:
         return False, str(e)
 
-
-def smoke_promote_from_item_json() -> tuple[bool, str]:
+def smoke_promote_derives_from_item_json() -> tuple[bool, str]:
     """Smoke: promote can derive set_id/idx from item_json when set_id blank and idx=-1."""
     try:
         import kcp.nodes.keyframe_promote as mod
@@ -1746,8 +1743,13 @@ def smoke_promote_from_item_json() -> tuple[bool, str]:
                 out = json.loads(out_json)
                 if not aid or out.get("asset_id") != aid:
                     return False, f"asset_id mismatch out={out}"
-                if out.get("json_fields", {}).get("source", {}).get("idx") != 5:
-                    return False, f"source idx mismatch out={out}"
+
+                try:
+                    mod.KCP_KeyframePromoteToAsset().run(db_path, "", -1, "bad_ref", "", "", "new", "", "")
+                    return False, "expected kcp_set_item_ref_missing"
+                except RuntimeError as e:
+                    if "kcp_set_item_ref_missing" not in str(e):
+                        return False, f"unexpected missing-ref error: {e}"
         finally:
             mod.pillow_available = orig_pillow
             mod.load_image_as_comfy = orig_load
@@ -1756,7 +1758,6 @@ def smoke_promote_from_item_json() -> tuple[bool, str]:
         return True, "promote derives item_json ok"
     except Exception as e:
         return False, str(e)
-
 
 def smoke_set_summary_node() -> tuple[bool, str]:
     """Smoke: set summary reports total/saved/picked correctly."""
@@ -1796,7 +1797,7 @@ def smoke_set_summary_node() -> tuple[bool, str]:
         return False, str(e)
 
 def smoke_set_pick_input_choices() -> tuple[bool, str]:
-    """Smoke: KeyframeSetPick INPUT_TYPES includes created set choices."""
+    """Smoke: KeyframeSetPick INPUT_TYPES includes created set choices with id+created_at label."""
     try:
         from kcp.nodes.project_init import KCP_ProjectInit
         from kcp.nodes.keyframe_set_pick import KCP_KeyframeSetPick
@@ -1811,17 +1812,25 @@ def smoke_set_pick_input_choices() -> tuple[bool, str]:
                 set_id = create_keyframe_set(conn, {"stack_id": "stack1", "variant_policy_id": "seed_sweep_12_v1", "variant_policy_json": {}, "base_seed": 1, "width": 64, "height": 64, "name": "myset"})
             finally:
                 conn.close()
-            inputs = KCP_KeyframeSetPick.INPUT_TYPES(db_path=db_path, include_empty=False, refresh_token=1, strict=False)
+
+            inputs = KCP_KeyframeSetPick.INPUT_TYPES(db_path=db_path, refresh_token=1, strict=False)
             choices = inputs["required"]["set_choice"][0]
-            if not any(str(set_id) in c for c in choices):
+            if not any(str(c).startswith(f"{set_id} | ") for c in choices):
                 return False, f"set choice missing created set: {choices}"
+
+            chosen = next(c for c in choices if str(c).startswith(f"{set_id} | "))
+            rid, set_json, _warn = KCP_KeyframeSetPick().run(db_path, chosen, 2, False)
+            if rid != set_id:
+                return False, f"set_id mismatch rid={rid} expected={set_id}"
+            payload = json.loads(set_json)
+            if payload.get("id") != set_id:
+                return False, f"set_json missing id payload={payload}"
         return True, "set pick input choices ok"
     except Exception as e:
         return False, str(e)
 
-
 def smoke_set_item_pick_input_choices() -> tuple[bool, str]:
-    """Smoke: KeyframeSetItemPick filters choices by only_with_media."""
+    """Smoke: KeyframeSetItemPick filters choices by only_with_media and parses labels."""
     try:
         from kcp.nodes.project_init import KCP_ProjectInit
         from kcp.nodes.keyframe_set_item_pick import KCP_KeyframeSetItemPick
@@ -1844,16 +1853,19 @@ def smoke_set_item_pick_input_choices() -> tuple[bool, str]:
             finally:
                 conn.close()
 
-            c1 = KCP_KeyframeSetItemPick.INPUT_TYPES(db_path=db_path, set_id=set_id, only_with_media=True, refresh_token=1, strict=False)["required"]["item_choice"][0]
-            c2 = KCP_KeyframeSetItemPick.INPUT_TYPES(db_path=db_path, set_id=set_id, only_with_media=False, refresh_token=2, strict=False)["required"]["item_choice"][0]
-            if not any(str(c).startswith("idx=0 ") for c in c1) or any(str(c).startswith("idx=1 ") for c in c1):
+            c1 = KCP_KeyframeSetItemPick.INPUT_TYPES(db_path=db_path, set_id=set_id, refresh_token=1, strict=False)["required"]["item_choice"][0]
+            c2 = KCP_KeyframeSetItemPick.INPUT_TYPES(db_path=db_path, set_id=set_id, refresh_token=2, strict=False, only_with_media=False)["required"]["item_choice"][0]
+            if not any(str(c).startswith("idx=0 [saved]") for c in c1) or any(str(c).startswith("idx=1") for c in c1):
                 return False, f"unexpected media-filtered choices: {c1}"
-            if not any(str(c).startswith("idx=1 ") for c in c2):
+            if not any("[missing]" in str(c) and str(c).startswith("idx=1") for c in c2):
                 return False, f"missing unsaved idx in unfiltered choices: {c2}"
+
+            idx, _item_json, _warn = KCP_KeyframeSetItemPick().run(db_path, set_id, "idx = 1 [missing] seed=2", 0, False, False)
+            if idx != 1:
+                return False, f"label parse mismatch idx={idx}"
         return True, "set item pick input choices ok"
     except Exception as e:
         return False, str(e)
-
 
 def smoke_refresh_token_convention_across_picks() -> tuple[bool, str]:
     """Smoke: refresh_token path updates choices for Asset/Stack/Set/Item pickers."""
@@ -1894,7 +1906,7 @@ def smoke_refresh_token_convention_across_picks() -> tuple[bool, str]:
 
             a1 = asset.KCP_AssetPick.INPUT_TYPES(db_path=db_path, asset_type="character", include_archived=False, refresh_token=1, strict=False)["required"]["asset_name"][0]
             s1 = stack.KCP_StackPick.INPUT_TYPES(db_path=db_path, include_archived=False, refresh_token=1, strict=False)["required"]["stack_name"][0]
-            set_choices = KCP_KeyframeSetPick.INPUT_TYPES(db_path=db_path, include_empty=False, refresh_token=1, strict=False)["required"]["set_choice"][0]
+            set_choices = KCP_KeyframeSetPick.INPUT_TYPES(db_path=db_path, refresh_token=1, strict=False)["required"]["set_choice"][0]
             item_choices = KCP_KeyframeSetItemPick.INPUT_TYPES(db_path=db_path, set_id=set_id, only_with_media=False, refresh_token=1, strict=False)["required"]["item_choice"][0]
 
             if any("r_asset" == c for c in a0) or not any("r_asset" == c for c in a1):
@@ -2002,6 +2014,22 @@ def smoke_set_image_load_promote_e2e() -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+def smoke_readme_mentions_winner_loop_wiring() -> tuple[bool, str]:
+    """Smoke: README contains winner-loop item_json wiring lines."""
+    try:
+        src = Path("README.md").read_text(encoding="utf-8")
+        required = [
+            "KCP_KeyframeSetPick.set_id` -> `KCP_KeyframeSetLoadBatch.set_id",
+            "KCP_KeyframeSetItemPick.item_json` -> `KCP_KeyframeSetMarkPicked.item_json",
+            "KCP_KeyframeSetItemPick.item_json` -> `KCP_KeyframePromoteToAsset.item_json",
+        ]
+        for s in required:
+            if s not in src:
+                return False, f"README missing wiring string: {s}"
+        return True, "readme winner loop wiring ok"
+    except Exception as e:
+        return False, str(e)
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fast", action="store_true")
@@ -2037,7 +2065,7 @@ def main() -> int:
             ("smoke_keyframe_set_save_derives_dims_seed_when_defaulted", smoke_keyframe_set_save_derives_dims_seed_when_defaulted),
             ("smoke_keyframe_set_save_stack_json_fallback_and_provenance", smoke_keyframe_set_save_stack_json_fallback_and_provenance),
             ("smoke_mark_picked", smoke_mark_picked),
-            ("smoke_mark_picked_from_item_json", smoke_mark_picked_from_item_json),
+            ("smoke_mark_picked_derives_from_item_json", smoke_mark_picked_derives_from_item_json),
             ("smoke_root_resolution", smoke_root_resolution),
             ("smoke_output_nodes", smoke_output_nodes),
             ("smoke_picker_empty_ok", smoke_picker_empty_ok),
@@ -2069,8 +2097,9 @@ def main() -> int:
             ("smoke_keyframe_set_save_policy_fallback", smoke_keyframe_set_save_policy_fallback),
             ("smoke_refresh_token_convention_across_picks", smoke_refresh_token_convention_across_picks),
             ("smoke_promote_dependency_input", smoke_promote_dependency_input),
-            ("smoke_promote_from_item_json", smoke_promote_from_item_json),
+            ("smoke_promote_derives_from_item_json", smoke_promote_derives_from_item_json),
             ("smoke_set_image_load_promote_e2e", smoke_set_image_load_promote_e2e),
+            ("smoke_readme_mentions_winner_loop_wiring", smoke_readme_mentions_winner_loop_wiring),
         ]:
             ok, msg = fn()
             oracles.append(name)

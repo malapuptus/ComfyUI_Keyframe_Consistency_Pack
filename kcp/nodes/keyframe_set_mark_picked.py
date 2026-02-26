@@ -41,7 +41,7 @@ class KCP_KeyframeSetMarkPicked:
             resolved_idx = int(item.get("idx"))
 
         if not resolved_set_id:
-            raise RuntimeError("kcp_keyframe_set_not_found: ")
+            raise RuntimeError("kcp_set_id_missing")
         if resolved_idx < 0:
             raise RuntimeError("kcp_set_item_not_found")
 

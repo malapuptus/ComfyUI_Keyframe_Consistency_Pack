@@ -1,31 +1,44 @@
+
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from kcp.db.paths import DEFAULT_DB_PATH_INPUT, normalize_db_path, with_projectinit_db_path_tip
 from kcp.db.repo import connect
 
 
-def _safe_set_choices(db_path: str, include_empty: bool, refresh_token: int) -> list[str]:
+def _fmt_created_at(ms: int | None) -> str:
+    if ms is None:
+        return ""
+    try:
+        return datetime.fromtimestamp(int(ms) / 1000.0, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except Exception:
+        return str(ms)
+
+
+def _safe_set_choices(db_path: str, refresh_token: int) -> list[str]:
     _ = refresh_token
-    choices = [""] if include_empty else []
     try:
         dbp = normalize_db_path(db_path)
         if not dbp.exists():
-            return choices or [""]
+            return [""]
         conn = connect(dbp)
         try:
-            rows = conn.execute("SELECT id,name FROM keyframe_sets ORDER BY created_at DESC, id DESC").fetchall()
+            rows = conn.execute("SELECT id,name,created_at FROM keyframe_sets ORDER BY created_at DESC, id DESC").fetchall()
+            choices: list[str] = [""]
             for r in rows:
-                label = str(r["id"])
-                if (r["name"] or "").strip():
-                    label = f"{r['id']} | {r['name']}"
+                created = _fmt_created_at(r["created_at"])
+                name = (r["name"] or "").strip()
+                label = f"{r['id']} | {created}"
+                if name:
+                    label = f"{label} | {name}"
                 choices.append(label)
-            return choices or [""]
+            return choices
         finally:
             conn.close()
     except Exception:
-        return choices or [""]
+        return [""]
 
 
 class KCP_KeyframeSetPick:
@@ -33,17 +46,15 @@ class KCP_KeyframeSetPick:
     def INPUT_TYPES(
         cls,
         db_path: str = DEFAULT_DB_PATH_INPUT,
-        include_empty: bool = False,
         refresh_token: int = 0,
         strict: bool = False,
     ):
         effective_db_path = str(db_path).strip() or DEFAULT_DB_PATH_INPUT
-        choices = _safe_set_choices(effective_db_path, include_empty, refresh_token)
+        choices = _safe_set_choices(effective_db_path, refresh_token)
         return {
             "required": {
                 "db_path": ("STRING", {"default": effective_db_path}),
                 "set_choice": (choices,),
-                "include_empty": ("BOOLEAN", {"default": include_empty}),
                 "refresh_token": ("INT", {"default": refresh_token}),
                 "strict": ("BOOLEAN", {"default": strict}),
             }
@@ -54,8 +65,8 @@ class KCP_KeyframeSetPick:
     FUNCTION = "run"
     CATEGORY = "KCP"
 
-    def run(self, db_path: str, set_choice: str, include_empty: bool = False, refresh_token: int = 0, strict: bool = False):
-        _ = include_empty, refresh_token
+    def run(self, db_path: str, set_choice: str, refresh_token: int = 0, strict: bool = False):
+        _ = refresh_token
         if not (set_choice or "").strip():
             if strict:
                 raise RuntimeError("kcp_set_not_found")
