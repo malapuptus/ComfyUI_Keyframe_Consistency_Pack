@@ -27,8 +27,8 @@ def resolve_root(kcp_root: str) -> Path:
     comfy_out = _comfy_output_dir()
     if comfy_out is not None:
         parts = root.parts
-        if len(parts) >= 2 and parts[0].lower() == "output":
-            root = Path(*parts[1:])
+        if len(parts) >= 1 and parts[0].lower() == "output":
+            root = Path(*parts[1:]) if len(parts) > 1 else Path()
         return (comfy_out / root).resolve()
 
     return (Path.cwd() / root).resolve()

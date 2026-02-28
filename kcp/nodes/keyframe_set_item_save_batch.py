@@ -62,6 +62,21 @@ class KCP_KeyframeSetItemSaveBatch:
         try:
             dbp = normalize_db_path(db_path)
             root = kcp_root_from_db_path(db_path)
+            # Preflight: avoid partial batch writes when overwrite=False.
+            # If ANY target index already has media, fail before writing anything.
+            if not overwrite:
+                _shape = getattr(images, 'shape', None)
+                _batch_size = int(_shape[0]) if _shape is not None and len(_shape) == 4 else 1
+                _ext = (format or 'webp').lower().strip('.')
+                if _ext not in {'webp', 'png'}:
+                    _ext = 'webp'
+                for _j in range(_batch_size):
+                    _idx = int(idx_start) + _j
+                    _image_abs = (root / f"sets/{set_id}/{_idx}.{_ext}").resolve()
+                    _thumb_abs = (root / f"sets/{set_id}/{_idx}_thumb.webp").resolve()
+                    if _image_abs.exists() or _thumb_abs.exists():
+                        raise RuntimeError(f"kcp_set_item_media_exists: set_id={set_id} idx={_idx}")
+
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
 
