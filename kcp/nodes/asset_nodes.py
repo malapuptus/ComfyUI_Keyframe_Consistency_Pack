@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
+from kcp.db.paths import DEFAULT_DB_PATH_INPUT, kcp_root_from_db_path, normalize_db_path, with_projectinit_db_path_tip
 from kcp.db.repo import (
     ASSET_TYPES,
     connect,
@@ -119,12 +119,17 @@ class KCP_AssetSave:
             image_rel = ""
             thumb_rel = ""
             image_hash = ""
+            if existing and save_mode == "overwrite_by_name" and image is None:
+                image_rel = existing["image_path"] or ""
+                thumb_rel = existing["thumb_path"] or ""
+                image_hash = existing["image_hash"] or ""
+
             if image is not None:
                 if not pillow_available():
                     raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
 
                 image_path = root / "images" / asset_type / asset_id / "original.png"
-                if not save_optional_image(image, image_path):
+                if not save_optional_image(image, image_path, fmt="PNG"):
                     raise RuntimeError("kcp_io_write_failed: failed to save IMAGE input")
 
                 image_rel = str(image_path.relative_to(root))
@@ -190,10 +195,11 @@ class KCP_AssetPick:
         refresh_token: int = 0,
         strict: bool = False,
     ):
-        choices = _safe_asset_choices(db_path, asset_type, include_archived, refresh_token)
+        effective_db_path = str(db_path).strip() or DEFAULT_DB_PATH_INPUT
+        choices = _safe_asset_choices(effective_db_path, asset_type, include_archived, refresh_token)
         return {
             "required": {
-                "db_path": ("STRING", {"default": db_path}),
+                "db_path": ("STRING", {"default": effective_db_path}),
                 "asset_type": (sorted(ASSET_TYPES),),
                 "asset_name": (choices,),
                 "include_archived": ("BOOLEAN", {"default": include_archived}),
@@ -249,6 +255,18 @@ class KCP_AssetPick:
                 }
                 return (row["id"], row["positive_fragment"], row["negative_fragment"], row["json_fields"], None, None, json.dumps(warning))
 
-            return (row["id"], row["positive_fragment"], row["negative_fragment"], row["json_fields"], None, None, "{}")
+            thumb_image = None
+            image = None
+            if row["thumb_path"]:
+                try:
+                    thumb_image = load_image_as_comfy(root / row["thumb_path"])
+                except Exception:
+                    thumb_image = None
+            if row["image_path"]:
+                try:
+                    image = load_image_as_comfy(root / row["image_path"])
+                except Exception:
+                    image = None
+            return (row["id"], row["positive_fragment"], row["negative_fragment"], row["json_fields"], thumb_image, image, "{}")
         finally:
             conn.close()

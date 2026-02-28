@@ -7,6 +7,7 @@ from kcp.db.paths import kcp_root_from_db_path, normalize_db_path, with_projecti
 from kcp.db.repo import connect, create_asset, get_asset_by_type_name, get_keyframe_set, get_set_item
 from kcp.util.hashing import sha256_file
 from kcp.util.image_io import load_image_as_comfy, make_thumbnail, pillow_available, save_optional_image
+from kcp.util.json_utils import parse_json_object
 from kcp.util.time_utils import now_ms
 
 
@@ -19,7 +20,7 @@ class KCP_KeyframePromoteToAsset:
             "required": {
                 "db_path": ("STRING", {"default": "output/kcp/db/kcp.sqlite"}),
                 "set_id": ("STRING", {"default": ""}),
-                "idx": ("INT", {"default": 0, "min": 0}),
+                "idx": ("INT", {"default": -1, "min": -1}),
                 "name": ("STRING", {"default": ""}),
                 "description": ("STRING", {"default": ""}),
                 "tags_csv": ("STRING", {"default": ""}),
@@ -27,6 +28,7 @@ class KCP_KeyframePromoteToAsset:
             },
             "optional": {
                 "depends_on_item_json": ("STRING", {"default": ""}),
+                "item_json": ("STRING", {"default": ""}),
             },
         }
 
@@ -45,8 +47,21 @@ class KCP_KeyframePromoteToAsset:
         tags_csv: str = "",
         save_mode: str = "new",
         depends_on_item_json: str = "",
+        item_json: str = "",
     ):
         _ = depends_on_item_json
+        resolved_set_id = (set_id or "").strip()
+        resolved_idx = int(idx)
+        if (not resolved_set_id or resolved_idx < 0) and (item_json or "").strip():
+            item = parse_json_object(item_json)
+            if not resolved_set_id:
+                resolved_set_id = str(item.get("set_id") or "").strip()
+            if resolved_idx < 0 and "idx" in item:
+                resolved_idx = int(item.get("idx"))
+        if not resolved_set_id:
+            raise RuntimeError("kcp_set_item_ref_missing")
+        if resolved_idx < 0:
+            raise RuntimeError("kcp_set_item_ref_missing")
         if not pillow_available():
             raise RuntimeError("kcp_io_write_failed: Pillow required to save IMAGE input; install with pip install pillow")
 
@@ -57,7 +72,7 @@ class KCP_KeyframePromoteToAsset:
         except Exception as e:
             raise with_projectinit_db_path_tip(db_path, e) from e
         try:
-            item = get_set_item(conn, set_id, idx)
+            item = get_set_item(conn, resolved_set_id, resolved_idx)
             if item is None:
                 raise RuntimeError("kcp_set_item_not_found")
             if not (item["image_path"] or "").strip():
@@ -71,13 +86,17 @@ class KCP_KeyframePromoteToAsset:
             if existing and save_mode == "new":
                 raise RuntimeError("kcp_asset_name_conflict")
 
-            set_row = get_keyframe_set(conn, set_id)
+            set_row = get_keyframe_set(conn, resolved_set_id)
             gen_params = json.loads(item["gen_params_json"]) if item["gen_params_json"] else {}
             provenance = {
-                "source": {"set_id": set_id, "idx": int(idx)},
+                "source": {"set_id": resolved_set_id, "idx": int(resolved_idx)},
                 "gen_params": gen_params,
                 "policy_id": set_row["variant_policy_id"] if set_row else "",
                 "stack_id": set_row["stack_id"] if set_row else "",
+                "prompt": {
+                    "positive": item["positive_prompt"],
+                    "negative": item["negative_prompt"],
+                },
             }
             tags = [t.strip() for t in tags_csv.split(",") if t.strip()]
 
