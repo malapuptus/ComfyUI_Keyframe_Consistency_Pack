@@ -15,6 +15,10 @@ from kcp.nodes.project_status import KCP_ProjectStatus
 from kcp.nodes.prompt_compose import KCP_PromptCompose
 from kcp.nodes.character_forge import KCP_CharacterForge
 from kcp.nodes.environment_forge import KCP_EnvironmentForge
+from kcp.nodes.seed_finder_generate import KCP_SeedFinderGenerate
+from kcp.nodes.seed_finder_review_grid import KCP_SeedFinderReviewGrid
+from kcp.nodes.seed_bank_save import KCP_SeedBankSave
+from kcp.nodes.seed_bank_query import KCP_SeedBankQuery
 from kcp.nodes.stack_nodes import KCP_StackPick, KCP_StackSave
 from kcp.nodes.variant_pack import KCP_VariantPack
 from kcp.nodes.variant_pick import KCP_VariantPick

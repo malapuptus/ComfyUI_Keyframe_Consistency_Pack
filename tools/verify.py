@@ -2266,6 +2266,236 @@ def smoke_forge_asset_roundtrip_environment_meta() -> tuple[bool, str]:
         return True, "forge->asset roundtrip environment metadata ok"
     except Exception as e:
         return False, str(e)
+
+
+def smoke_seedfinder_generate_determinism() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.seed_finder_generate import KCP_SeedFinderGenerate
+
+        node = KCP_SeedFinderGenerate()
+        a = node.run("random_unique", 8, 10, 0, 100000, 1, "abc")
+        b = node.run("random_unique", 8, 10, 0, 100000, 1, "abc")
+        if a != b:
+            return False, "seedfinder determinism mismatch"
+        c = node.run("random_unique", 8, 10, 0, 100000, 2, "abc")
+        if a[0] == c[0]:
+            return False, "reroll did not affect output"
+        return True, "seedfinder determinism ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seedfinder_generate_increment_mode() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.seed_finder_generate import KCP_SeedFinderGenerate
+
+        seeds, _, _ = KCP_SeedFinderGenerate().run("increment_from_base", 5, 100, 0, 1000, 0, "")
+        if seeds != [100, 101, 102, 103, 104]:
+            return False, f"unexpected seeds: {seeds}"
+        return True, "seedfinder increment mode ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seedfinder_generate_random_unique() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.seed_finder_generate import KCP_SeedFinderGenerate
+
+        seeds, _, _ = KCP_SeedFinderGenerate().run("random_unique", 20, 99, 0, 1000000, 0, "")
+        if len(seeds) != len(set(seeds)):
+            return False, "random_unique returned duplicates"
+        return True, "seedfinder random_unique ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seedfinder_reviewgrid_mismatch_min_behavior() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.seed_finder_review_grid import KCP_SeedFinderReviewGrid
+
+        img = [[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], [[0.0, 0.0, 1.0], [1.0, 1.0, 1.0]]]
+        out = KCP_SeedFinderReviewGrid().run(images=[img, img, img], seeds=[1, 2], columns=2, tile_padding=2, show_labels=True)
+        if out[2] != 2:
+            return False, f"expected min count=2 got={out[2]}"
+        if "warning" not in out[1].lower():
+            return False, "expected mismatch warning in seed_text"
+        return True, "reviewgrid mismatch handling ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seedfinder_reviewgrid_dimensions() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.seed_finder_review_grid import KCP_SeedFinderReviewGrid
+
+        img = [[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], [[0.0, 0.0, 1.0], [1.0, 1.0, 1.0]]]
+        grid, _, count = KCP_SeedFinderReviewGrid().run(images=[img, img, img], seeds=[11, 22, 33], columns=2, tile_padding=1, show_labels=False)
+        if count != 3:
+            return False, f"expected count=3 got={count}"
+        if hasattr(grid, "shape"):
+            shape = tuple(int(x) for x in grid.shape)
+            if len(shape) != 4 or shape[0] != 1 or shape[1] <= 0 or shape[2] <= 0:
+                return False, f"unexpected grid shape: {shape}"
+            return True, f"reviewgrid dimensions ok shape={shape}"
+        if isinstance(grid, list) and grid and isinstance(grid[0], list):
+            h = len(grid[0])
+            w = len(grid[0][0]) if h else 0
+            if h <= 0 or w <= 0:
+                return False, "grid list output empty"
+            return True, f"reviewgrid dimensions ok list_h={h} list_w={w}"
+        return False, f"unexpected grid type: {type(grid)}"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seed_bank_migration_and_unique() -> tuple[bool, str]:
+    try:
+        from kcp.db.repo import connect
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "kcp.sqlite"
+            conn = connect(db_path)
+            try:
+                row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='seed_bank_entry'").fetchone()
+                if not row:
+                    return False, "seed_bank_entry missing on fresh db"
+                conn.execute(
+                    "INSERT INTO seed_bank_entry (seed, created_at, prompt_hash, context_hash) VALUES (?, strftime('%s','now')*1000, ?, ?)",
+                    (5, "p", "ctx"),
+                )
+                conn.commit()
+                try:
+                    conn.execute(
+                        "INSERT INTO seed_bank_entry (seed, created_at, prompt_hash, context_hash) VALUES (?, strftime('%s','now')*1000, ?, ?)",
+                        (5, "p2", "ctx"),
+                    )
+                    conn.commit()
+                    return False, "expected unique constraint failure"
+                except Exception:
+                    pass
+            finally:
+                conn.close()
+
+            # Existing DB at v1 should migrate to v2
+            import sqlite3
+            raw = sqlite3.connect(db_path)
+            raw.execute("PRAGMA user_version = 1")
+            raw.commit()
+            raw.close()
+            conn2 = connect(db_path)
+            try:
+                v = conn2.execute("PRAGMA user_version").fetchone()[0]
+                if int(v) < 2:
+                    return False, f"expected user_version>=2 got={v}"
+            finally:
+                conn2.close()
+        return True, "seed bank migration+unique ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seed_bank_save_parse_ranges() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.seed_bank_save import _parse_picked_indexes
+
+        vals = _parse_picked_indexes("0-2, 2, 5")
+        if vals != [0, 1, 2, 5]:
+            return False, f"unexpected parse result: {vals}"
+        return True, "seed bank parse ranges ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seed_bank_save_oob_no_partial() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.nodes.seed_bank_save import KCP_SeedBankSave
+        from kcp.db.repo import connect
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+            out = KCP_SeedBankSave().run(db_path, [10, 20, 30], "0,9", "seed_plus_context", "p", "n", "ckpt", "euler", "normal", 20, 7.0, 512, 512, "a,b", "", "{}")
+            if out[1] != 0 or out[2] == 0:
+                return False, f"unexpected save/skip counts: saved={out[1]} skipped={out[2]}"
+            conn = connect(Path(db_path))
+            try:
+                cnt = conn.execute("SELECT COUNT(*) FROM seed_bank_entry").fetchone()[0]
+                if cnt != 0:
+                    return False, f"expected zero rows after oob preflight got={cnt}"
+            finally:
+                conn.close()
+        return True, "seed bank oob preflight no-partial ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seed_bank_save_dedupe_seed_plus_context() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.nodes.seed_bank_save import KCP_SeedBankSave
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+            node = KCP_SeedBankSave()
+            a = node.run(db_path, [101, 202], "0", "seed_plus_context", "p", "n", "ckpt", "euler", "normal", 20, 7.0, 512, 512, "tag", "", '{"shot":1}')
+            b = node.run(db_path, [101, 202], "0", "seed_plus_context", "p", "n", "ckpt", "euler", "normal", 20, 7.0, 512, 512, "tag", "", '{"shot":1}')
+            if a[1] != 1 or b[2] < 1:
+                return False, f"dedupe behavior unexpected a={a[1:3]} b={b[1:3]}"
+        return True, "seed bank dedupe seed_plus_context ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_seed_bank_query_tags_any_all_and_randomize() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.nodes.seed_bank_save import KCP_SeedBankSave
+        from kcp.nodes.seed_bank_query import KCP_SeedBankQuery
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+            saver = KCP_SeedBankSave()
+            saver.run(db_path, [1], "0", "seed_only", "p", "n", "ckptA", "euler", "normal", 20, 7.0, 512, 512, "indoor,night", "", "{}")
+            saver.run(db_path, [2], "0", "seed_only", "p", "n", "ckptA", "euler", "normal", 20, 7.0, 512, 512, "indoor,day", "", "{}")
+            saver.run(db_path, [3], "0", "seed_only", "p", "n", "ckptB", "euler", "normal", 20, 7.0, 512, 512, "outdoor,night", "", "{}")
+
+            q = KCP_SeedBankQuery()
+            any_seeds, _, _ = q.run(db_path, "by_tags_any", "indoor,night", 10, False, "")
+            all_seeds, _, _ = q.run(db_path, "by_tags_all", "indoor,night", 10, False, "")
+            if set(any_seeds) != {1, 2, 3}:
+                return False, f"tags_any mismatch: {any_seeds}"
+            if set(all_seeds) != {1}:
+                return False, f"tags_all mismatch: {all_seeds}"
+
+            latest, _, _ = q.run(db_path, "latest", "", 10, False, "")
+            shuffled, _, _ = q.run(db_path, "latest", "", 10, True, "salt1")
+            if set(latest) != set(shuffled):
+                return False, "randomize changed seed set"
+        return True, "seed bank query tags/randomize ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_examples_seedfinder_workflow_exists() -> tuple[bool, str]:
+    try:
+        path = Path("examples/workflows/seed_finder_onramp.json")
+        if not path.exists():
+            return False, "seed_finder_onramp workflow missing"
+        json.loads(path.read_text(encoding="utf-8"))
+        return True, "seed_finder_onramp workflow parse ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_readme_mentions_seed_list_to_ksampler_seed() -> tuple[bool, str]:
+    try:
+        src = Path("README.md").read_text(encoding="utf-8")
+        needle = "KCP_SeedFinderGenerate.seeds` (list) -> `KSampler.seed"
+        if needle not in src:
+            return False, "README missing seed list to KSampler seed wiring"
+        return True, "README seed list wiring mention ok"
+    except Exception as e:
+        return False, str(e)
 def smoke_readme_mentions_winner_loop_wiring() -> tuple[bool, str]:
     """Smoke: README contains winner-loop and on-ramp wiring lines."""
     try:
@@ -2374,6 +2604,18 @@ def main() -> int:
             ("smoke_examples_workflows_exist", smoke_examples_workflows_exist),
             ("smoke_forge_asset_roundtrip_character", smoke_forge_asset_roundtrip_character),
             ("smoke_forge_asset_roundtrip_environment_meta", smoke_forge_asset_roundtrip_environment_meta),
+            ("smoke_seedfinder_generate_determinism", smoke_seedfinder_generate_determinism),
+            ("smoke_seedfinder_generate_increment_mode", smoke_seedfinder_generate_increment_mode),
+            ("smoke_seedfinder_generate_random_unique", smoke_seedfinder_generate_random_unique),
+            ("smoke_seedfinder_reviewgrid_mismatch_min_behavior", smoke_seedfinder_reviewgrid_mismatch_min_behavior),
+            ("smoke_seedfinder_reviewgrid_dimensions", smoke_seedfinder_reviewgrid_dimensions),
+            ("smoke_seed_bank_migration_and_unique", smoke_seed_bank_migration_and_unique),
+            ("smoke_seed_bank_save_parse_ranges", smoke_seed_bank_save_parse_ranges),
+            ("smoke_seed_bank_save_oob_no_partial", smoke_seed_bank_save_oob_no_partial),
+            ("smoke_seed_bank_save_dedupe_seed_plus_context", smoke_seed_bank_save_dedupe_seed_plus_context),
+            ("smoke_seed_bank_query_tags_any_all_and_randomize", smoke_seed_bank_query_tags_any_all_and_randomize),
+            ("smoke_examples_seedfinder_workflow_exists", smoke_examples_seedfinder_workflow_exists),
+            ("smoke_readme_mentions_seed_list_to_ksampler_seed", smoke_readme_mentions_seed_list_to_ksampler_seed),
             ("smoke_readme_mentions_winner_loop_wiring", smoke_readme_mentions_winner_loop_wiring),
         ]:
             ok, msg = fn()
