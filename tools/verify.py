@@ -2014,6 +2014,258 @@ def smoke_set_image_load_promote_e2e() -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+
+
+def smoke_character_forge_determinism() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.character_forge import KCP_CharacterForge
+
+        node = KCP_CharacterForge()
+        args = dict(
+            archetype="heroic guardian",
+            age_band="(random)",
+            skin_tone="(random)",
+            hair_color="(random)",
+            hair_style="(random)",
+            eye_color="(random)",
+            wardrobe="(random)",
+            accessory="(random)",
+            body_type="(random)",
+            style_preset="cinematic realism",
+            quality_level="normal",
+            seed=123,
+            reroll=9,
+            freeform_addon="",
+        )
+        a = node.run(**args)
+        b = node.run(**args)
+        if a != b:
+            return False, "same inputs produced different outputs"
+        return True, "character forge determinism ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_character_forge_json_fields_schema_shape() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.character_forge import KCP_CharacterForge
+
+        out = KCP_CharacterForge().run(
+            "heroic guardian",
+            "adult",
+            "medium",
+            "brown",
+            "short tidy",
+            "brown",
+            "casual jacket",
+            "simple pendant",
+            "athletic",
+            "cinematic realism",
+            "normal",
+            0,
+            0,
+            "",
+        )
+        payload = json.loads(out[5])
+        for key in ("asset_type", "format_version", "invariants", "variables", "prompt"):
+            if key not in payload:
+                return False, f"missing key: {key}"
+        if payload.get("asset_type") != "character":
+            return False, "asset_type mismatch"
+        prompt = payload.get("prompt", {})
+        for key in ("positive_fragment", "negative_fragment", "tokens"):
+            if key not in prompt:
+                return False, f"missing prompt key: {key}"
+        return True, "character forge json_fields shape ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_environment_forge_determinism() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.environment_forge import KCP_EnvironmentForge
+
+        node = KCP_EnvironmentForge()
+        args = dict(
+            scene_type="interior",
+            location="(random)",
+            era="(random)",
+            time_of_day="(random)",
+            weather="(random)",
+            mood="(random)",
+            no_people=True,
+            no_text_signage=True,
+            style_preset="cinematic realism",
+            quality_level="normal",
+            seed=7,
+            reroll=2,
+            freeform_addon="",
+        )
+        if node.run(**args) != node.run(**args):
+            return False, "environment determinism mismatch"
+        return True, "environment forge determinism ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_environment_forge_plate_flags() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.environment_forge import KCP_EnvironmentForge
+
+        node = KCP_EnvironmentForge()
+        on = node.run("interior", "abandoned library", "modern day", "night", "clear", "calm", True, True, "cinematic realism", "normal", 0, 0, "")
+        off = node.run("interior", "abandoned library", "modern day", "night", "clear", "calm", False, False, "cinematic realism", "normal", 0, 0, "")
+        if "people" not in on[4] or "text" not in on[4]:
+            return False, "flag-enabled negatives missing"
+        if "people" in off[4] or "text" in off[4]:
+            return False, "flag-disabled negatives still present"
+        return True, "environment plate flags ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_promptcompose_multiline_present() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.prompt_compose import KCP_PromptCompose
+
+        required = [
+            "character_fragment",
+            "environment_fragment",
+            "action_fragment",
+            "camera_fragment",
+            "lighting_fragment",
+            "style_fragment",
+            "global_rules",
+            "negative_base",
+        ]
+        cfg = KCP_PromptCompose.INPUT_TYPES()["required"]
+        for key in required:
+            meta = cfg[key][1]
+            if not meta.get("multiline", False):
+                return False, f"{key} missing multiline"
+        return True, "prompt compose multiline inputs ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_promptcompose_newline_blocks() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.prompt_compose import KCP_PromptCompose
+
+        pos, _, _ = KCP_PromptCompose().run("char", "env", "act", "cam", "light", "style", "rules", "neg", "newline_blocks", False)
+        if "\n" not in pos or "," in pos:
+            return False, f"unexpected newline_blocks output: {pos}"
+        return True, "prompt compose newline_blocks ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_promptcompose_dedupe_tokens() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.prompt_compose import KCP_PromptCompose
+
+        pos, _, _ = KCP_PromptCompose().run("hero", "rain, hero", "", "", "", "", "hero\nrain", "", "dedupe_tokens", False)
+        if pos.lower().count("hero") != 1 or pos.lower().count("rain") != 1:
+            return False, f"dedupe failed: {pos}"
+        return True, "prompt compose dedupe_tokens ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_variantpack_seed_mode_fixed() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.variant_pack import KCP_VariantPack
+
+        payload = json.loads(KCP_VariantPack().run("p", "n", "camera_coverage_12_v1", 3, 77, "fixed", 512, 512, 20, 6.0, "euler", "normal", 1.0, "{}")[0])
+        seeds = [v["gen_params"]["seed"] for v in payload["variants"]]
+        if len(set(seeds)) != 1 or seeds[0] != 77:
+            return False, f"unexpected fixed seeds: {seeds}"
+        return True, "variantpack fixed seed_mode ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_variantpack_seed_mode_increment_compat() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.variant_pack import KCP_VariantPack
+
+        payload = json.loads(KCP_VariantPack().run("p", "n", "camera_coverage_12_v1", 3, 77, "increment", 512, 512, 20, 6.0, "euler", "normal", 1.0, "{}")[0])
+        seeds = [v["gen_params"]["seed"] for v in payload["variants"]]
+        if seeds != [77, 78, 79]:
+            return False, f"unexpected increment seeds: {seeds}"
+        return True, "variantpack increment compatibility ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_variantpack_seed_mode_hash_label_stable() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.variant_pack import KCP_VariantPack
+
+        a = json.loads(KCP_VariantPack().run("p", "n", "camera_coverage_12_v1", 2, 33, "hash_label", 512, 512, 20, 6.0, "euler", "normal", 1.0, "{}")[0])
+        b = json.loads(KCP_VariantPack().run("p", "n", "camera_coverage_12_v1", 2, 33, "hash_label", 512, 512, 20, 6.0, "euler", "normal", 1.0, "{}")[0])
+        seeds_a = [v["gen_params"]["seed"] for v in a["variants"]]
+        seeds_b = [v["gen_params"]["seed"] for v in b["variants"]]
+        if seeds_a != seeds_b:
+            return False, "hash_label not stable across runs"
+        if len(set(seeds_a)) != len(seeds_a):
+            return False, f"hash_label seeds not label-sensitive: {seeds_a}"
+        return True, "variantpack hash_label stable"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_examples_workflows_exist() -> tuple[bool, str]:
+    try:
+        path = Path("examples/workflows/KCP_Start_Here__Forge_Character_And_Environment.json")
+        if not path.exists():
+            return False, "start-here workflow missing"
+        json.loads(path.read_text(encoding="utf-8"))
+        return True, "start-here workflow exists and parses"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_forge_asset_roundtrip_character() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.nodes.character_forge import KCP_CharacterForge
+        from kcp.nodes.asset_nodes import KCP_AssetSave, KCP_AssetPick
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+            out = KCP_CharacterForge().run("heroic guardian", "adult", "medium", "brown", "short tidy", "brown", "casual jacket", "simple pendant", "athletic", "cinematic realism", "normal", 0, 0, "")
+            _, _, save_json = KCP_AssetSave().run(db_path, out[0], out[1], out[2], out[3], out[4], out[5], out[6], "new", None)
+            saved = json.loads(save_json)
+            picked = KCP_AssetPick().run(db_path, "character", out[1], False, 0, True)
+            if picked[0] != saved["asset_id"]:
+                return False, "picked asset_id mismatch"
+            if picked[1] != out[3]:
+                return False, "picked positive fragment mismatch"
+        return True, "forge->asset roundtrip character ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def smoke_forge_asset_roundtrip_environment_meta() -> tuple[bool, str]:
+    try:
+        from kcp.nodes.project_init import KCP_ProjectInit
+        from kcp.nodes.environment_forge import KCP_EnvironmentForge
+        from kcp.nodes.asset_nodes import KCP_AssetSave, KCP_AssetPick
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path, _, _ = KCP_ProjectInit().run(str(Path(td) / "kcp"), "kcp.sqlite", True)
+            out = KCP_EnvironmentForge().run("interior", "abandoned library", "modern day", "night", "clear", "calm", True, True, "cinematic realism", "normal", 0, 0, "")
+            KCP_AssetSave().run(db_path, out[0], out[1], out[2], out[3], out[4], out[5], out[6], "new", None)
+            picked = KCP_AssetPick().run(db_path, "environment", out[1], False, 0, True)
+            if picked[0] == "":
+                return False, "no environment asset selected"
+            payload = json.loads(picked[3])
+            if payload.get("asset_type") != "environment":
+                return False, "environment json_fields missing asset_type"
+        return True, "forge->asset roundtrip environment metadata ok"
+    except Exception as e:
+        return False, str(e)
 def smoke_readme_mentions_winner_loop_wiring() -> tuple[bool, str]:
     """Smoke: README contains winner-loop and on-ramp wiring lines."""
     try:
@@ -2109,6 +2361,19 @@ def main() -> int:
             ("smoke_promote_dependency_input", smoke_promote_dependency_input),
             ("smoke_promote_derives_from_item_json", smoke_promote_derives_from_item_json),
             ("smoke_set_image_load_promote_e2e", smoke_set_image_load_promote_e2e),
+            ("smoke_character_forge_determinism", smoke_character_forge_determinism),
+            ("smoke_character_forge_json_fields_schema_shape", smoke_character_forge_json_fields_schema_shape),
+            ("smoke_environment_forge_determinism", smoke_environment_forge_determinism),
+            ("smoke_environment_forge_plate_flags", smoke_environment_forge_plate_flags),
+            ("smoke_promptcompose_multiline_present", smoke_promptcompose_multiline_present),
+            ("smoke_promptcompose_newline_blocks", smoke_promptcompose_newline_blocks),
+            ("smoke_promptcompose_dedupe_tokens", smoke_promptcompose_dedupe_tokens),
+            ("smoke_variantpack_seed_mode_fixed", smoke_variantpack_seed_mode_fixed),
+            ("smoke_variantpack_seed_mode_increment_compat", smoke_variantpack_seed_mode_increment_compat),
+            ("smoke_variantpack_seed_mode_hash_label_stable", smoke_variantpack_seed_mode_hash_label_stable),
+            ("smoke_examples_workflows_exist", smoke_examples_workflows_exist),
+            ("smoke_forge_asset_roundtrip_character", smoke_forge_asset_roundtrip_character),
+            ("smoke_forge_asset_roundtrip_environment_meta", smoke_forge_asset_roundtrip_environment_meta),
             ("smoke_readme_mentions_winner_loop_wiring", smoke_readme_mentions_winner_loop_wiring),
         ]:
             ok, msg = fn()

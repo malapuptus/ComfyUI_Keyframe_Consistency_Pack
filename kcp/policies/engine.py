@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+from hashlib import sha256
 
 from kcp.policies.builtin import BUILTIN_POLICIES
 
@@ -23,6 +24,7 @@ def build_variants(
     policy_id: str,
     count: int,
     base_seed: int,
+    seed_mode: str = "increment",
     width: int,
     height: int,
     steps: int,
@@ -46,7 +48,20 @@ def build_variants(
         if text:
             variant_positive = f"{variant_positive}, {text}" if variant_positive else text
 
-        seed = int(base_seed) + i
+        selected_seed_mode = seed_mode
+        if selected_seed_mode == "policy_default":
+            policy_mode = str(policy.get("seed_strategy", {}).get("mode", "offset"))
+            selected_seed_mode = "increment" if policy_mode in ("offset", "increment") else "increment"
+
+        if selected_seed_mode == "fixed":
+            seed = int(base_seed)
+        elif selected_seed_mode == "hash_label":
+            label = str(inj.get("label", ""))
+            digest = sha256(f"{int(base_seed)}::{label}".encode("utf-8")).hexdigest()
+            seed = int(digest[:8], 16)
+        else:
+            seed = int(base_seed) + i
+
         variants.append(
             {
                 "index": i,

@@ -182,3 +182,4 @@ SaveImage format note: invalid `format` values are coerced to `webp`.
 - `KeyframeSetSave.set_id -> KCP_KeyframeSetItemSaveBatch.set_id`
 - `KCP_KeyframeSetPick -> KCP_KeyframeSetLoadBatch -> KCP_KeyframeSetItemPick -> KCP_KeyframeSetMarkPicked -> KCP_KeyframePromoteToAsset`
 - Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_pick_winner.json`.
+- Start-here onboarding workflow JSON: `examples/workflows/KCP_Start_Here__Forge_Character_And_Environment.json` (Forge -> Render -> Pick -> Save for character + environment, with `seed_mode=fixed` variant packs).
