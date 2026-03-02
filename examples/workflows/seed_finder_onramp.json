@@ -1,0 +1,17 @@
+{
+  "name": "KCP Seed Finder in 2 minutes",
+  "notes": [
+    "Generate -> KSampler seed",
+    "VAEDecode -> ReviewGrid images",
+    "ReviewGrid seed_text -> manual pick -> SeedBankSave",
+    "SeedBankQuery -> KSampler seed"
+  ],
+  "nodes": [
+    "KCP_SeedFinderGenerate",
+    "KSampler",
+    "VAE Decode",
+    "KCP_SeedFinderReviewGrid",
+    "KCP_SeedBankSave",
+    "KCP_SeedBankQuery"
+  ]
+}

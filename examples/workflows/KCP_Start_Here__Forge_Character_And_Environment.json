@@ -1,0 +1,26 @@
+{
+  "name": "KCP Start Here — Forge Character and Environment",
+  "notes": [
+    "A) Character path: KCP_CharacterForge -> KCP_VariantPack(policy=camera_coverage_12_v1, seed_mode=fixed) -> KCP_VariantUnroll -> render(list mapping) -> KCP_KeyframeSetItemSaveBatch / SaveImage -> KCP_KeyframeSetItemPick -> KCP_AssetSave(asset_type=character).",
+    "B) Environment path: KCP_EnvironmentForge -> KCP_VariantPack(policy=micro_variation_12_v1, seed_mode=fixed) -> KCP_VariantUnroll -> render(list mapping) -> KCP_AssetSave(asset_type=environment, image connected when available).",
+    "C) Reuse path: KCP_AssetPick(character/environment) outputs -> KCP_PromptCompose -> KCP_VariantPack -> KCP_KeyframeSetSave for sequence/keyframe workflows.",
+    "Minimal user edits: dropdown choices + queue."
+  ],
+  "nodes": [
+    "KCP_ProjectInit",
+    "KCP_CharacterForge",
+    "KCP_EnvironmentForge",
+    "KCP_PromptCompose",
+    "KCP_VariantPack",
+    "KCP_VariantUnroll",
+    "KCP_KeyframeSetSave",
+    "KCP_KeyframeSetItemSaveBatch",
+    "KCP_KeyframeSetItemPick",
+    "KCP_AssetSave",
+    "KCP_AssetPick",
+    "KSampler",
+    "VAE Decode",
+    "SaveImage",
+    "PreviewImage"
+  ]
+}

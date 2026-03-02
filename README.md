@@ -182,3 +182,14 @@ SaveImage format note: invalid `format` values are coerced to `webp`.
 - `KeyframeSetSave.set_id -> KCP_KeyframeSetItemSaveBatch.set_id`
 - `KCP_KeyframeSetPick -> KCP_KeyframeSetLoadBatch -> KCP_KeyframeSetItemPick -> KCP_KeyframeSetMarkPicked -> KCP_KeyframePromoteToAsset`
 - Example workflow JSON: `examples/workflows/opinionated_onramp_render_persist_pick_winner.json`.
+- Start-here onboarding workflow JSON: `examples/workflows/KCP_Start_Here__Forge_Character_And_Environment.json` (Forge -> Render -> Pick -> Save for character + environment, with `seed_mode=fixed` variant packs).
+
+
+## Seed Finder in 2 minutes
+- `KCP_SeedFinderGenerate.seeds` (list) -> `KSampler.seed` (list-mapped)
+- `VAE Decode` IMAGE list -> `KCP_SeedFinderReviewGrid.images`
+- `KCP_SeedFinderGenerate.seeds` -> `KCP_SeedFinderReviewGrid.seeds`
+- Use `KCP_SeedFinderReviewGrid.seed_text` to choose picks, then enter indexes into `KCP_SeedBankSave.picked_indexes`
+- `KCP_SeedBankSave.picked_seeds` confirms what was saved to DB
+- `KCP_SeedBankQuery.seeds` (list) -> `KSampler.seed` for reuse
+- Example workflow JSON: `examples/workflows/seed_finder_onramp.json`
