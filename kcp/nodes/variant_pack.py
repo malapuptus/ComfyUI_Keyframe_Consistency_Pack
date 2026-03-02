@@ -16,6 +16,7 @@ class KCP_VariantPack:
                 "variant_policy_id": (available_policy_ids(),),
                 "count": ("INT", {"default": 12, "min": 1, "max": 256}),
                 "base_seed": ("INT", {"default": 0, "min": 0, "max": 2147483647}),
+                "seed_mode": (["increment", "fixed", "hash_label", "policy_default"],),
                 "width": ("INT", {"default": 1024, "min": 64}),
                 "height": ("INT", {"default": 1024, "min": 64}),
                 "steps": ("INT", {"default": 26, "min": 1}),
@@ -32,13 +33,14 @@ class KCP_VariantPack:
     FUNCTION = "run"
     CATEGORY = "KCP"
 
-    def run(self, positive_prompt, negative_prompt, variant_policy_id, count, base_seed, width, height, steps, cfg, sampler, scheduler, denoise, policy_overrides_json):
+    def run(self, positive_prompt, negative_prompt, variant_policy_id, count, base_seed, seed_mode, width, height, steps, cfg, sampler, scheduler, denoise, policy_overrides_json):
         payload = build_variants(
             positive_prompt=positive_prompt,
             negative_prompt=negative_prompt,
             policy_id=variant_policy_id,
             count=count,
             base_seed=base_seed,
+            seed_mode=seed_mode,
             width=width,
             height=height,
             steps=steps,

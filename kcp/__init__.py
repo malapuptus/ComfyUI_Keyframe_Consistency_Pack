@@ -13,6 +13,8 @@ from kcp.nodes.keyframe_set_item_save_batch import KCP_KeyframeSetItemSaveBatch
 from kcp.nodes.project_init import KCP_ProjectInit
 from kcp.nodes.project_status import KCP_ProjectStatus
 from kcp.nodes.prompt_compose import KCP_PromptCompose
+from kcp.nodes.character_forge import KCP_CharacterForge
+from kcp.nodes.environment_forge import KCP_EnvironmentForge
 from kcp.nodes.stack_nodes import KCP_StackPick, KCP_StackSave
 from kcp.nodes.variant_pack import KCP_VariantPack
 from kcp.nodes.variant_pick import KCP_VariantPick
@@ -25,6 +27,8 @@ NODE_CLASS_MAPPINGS = {
     "KCP_StackSave": KCP_StackSave,
     "KCP_StackPick": KCP_StackPick,
     "KCP_PromptCompose": KCP_PromptCompose,
+    "KCP_CharacterForge": KCP_CharacterForge,
+    "KCP_EnvironmentForge": KCP_EnvironmentForge,
     "KCP_VariantPack": KCP_VariantPack,
     "KCP_VariantPick": KCP_VariantPick,
     "KCP_VariantUnroll": KCP_VariantUnroll,
